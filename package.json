@@ -1,0 +1,29 @@
+{
+  "name": "purescript-psa",
+  "version": "0.1.0",
+  "description": "Error/Warning reporting frontend for psc",
+  "keywords": ["purescript", "psc"],
+  "author": "Nathan Faubion <nathan@n-son.com> (https://github.com/natefaubion/)",
+  "license": "MIT",
+  "bin": {
+    "psa": "index.js"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "setup": "bower link && cd bin && bower link purescript-psa && bower install",
+    "compile": "psc -r \"../\" -c -f \"bin/src/**/*.js\" -f \"bin/bower_components/purescript-*/src/**/*.js\" \"bin/src/**/*.purs\" \"bin/bower_components/purescript-*/src/**/*.purs\"",
+    "compile-self": "node index.js -r \"../\" -c -f \"bin/src/**/*.js\" -f \"bin/bower_components/purescript-*/src/**/*.js\" \"bin/src/**/*.purs\" \"bin/bower_components/purescript-*/src/**/*.purs\"",
+    "pretest": "rm -rf test/output",
+    "test": "node index.js -o \"test/output\" -f \"test/*.js\" -f \"test/bower_components/purescript-*/src/**/*.js\" \"test/*.purs\" \"test/bower_components/purescript-*/src/**/*.purs\"",
+    "pretest-psc": "rm -rf test/output",
+    "test-psc": "psc -o \"test/output\" -f \"test/*.js\" -f \"test/bower_components/purescript-*/src/**/*.js\" \"test/*.purs\" \"test/bower_components/purescript-*/src/**/*.purs\"",
+    "predocs": "rm -rf docs",
+    "docs": "psc-docs \"bin/bower_components/*/src/**/*.purs\" --docgen Psa:docs/Psa.md --docgen Psa.Printer:docs/Psa.Printer.md --docgen Psa.Printer.Default:docs/Psa.Printer.Default.md",
+    "prepublish": "rm -rf output && npm run compile"
+  },
+  "devDependencies": {
+    "bower": "^1.7.2"
+  }
+}
