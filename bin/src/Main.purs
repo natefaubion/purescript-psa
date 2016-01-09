@@ -4,6 +4,7 @@ import Prelude (Unit, pure, bind, otherwise, void, show, (>>=), (<$>), (<>), ($)
 import Data.Argonaut.Parser (jsonParser)
 import Data.Argonaut.Decode (decodeJson)
 import Data.Array as Array
+import Data.Array.Unsafe (unsafeIndex)
 import Data.Either (Either(..))
 import Data.Foldable (foldr, for_)
 import Data.StrMap.ST as STMap
@@ -153,11 +154,9 @@ main = void do
   cwd <- Process.cwd
   argv <- Array.drop 2 <$> Process.argv
   { extra, opts, psc, showSource } <- parseOptions (defaultOptions { cwd = cwd }) argv
-  child <- Child.spawn psc (Array.cons "--json-errors" extra) Child.defaultSpawnOptions
+  child <- Child.spawn psc (Array.cons "--json-errors" extra) Child.defaultSpawnOptions { stdio = stdio }
   files <- STMap.new
   buffer <- ST.newSTRef ""
-
-  Stream.pipe (Child.stdout child) Process.stdout
 
   Stream.onDataString (Child.stderr child) Encoding.UTF8 \chunk ->
     void $ ST.modifySTRef buffer (<> chunk)
@@ -178,6 +177,7 @@ main = void do
         Process.exit 1
 
   where
+  stdio = [ Just Child.Pipe, unsafeIndex Child.inherit 1, Just Child.Pipe ]
   loadNothing _ _ = pure Nothing
 
   -- TODO: Handle exceptions
