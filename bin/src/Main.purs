@@ -1,15 +1,13 @@
 module Main where
 
-import Prelude (Unit, pure, bind, otherwise, top, (>>=), (<$>), (<<<), (<>), ($), (-), (||), (==))
+import Prelude (Unit, pure, bind, otherwise, void, show, (>>=), (<$>), (<>), ($), (-), (||), (==))
 import Data.Argonaut.Parser (jsonParser)
-import Data.Argonaut.Printer (printJson)
 import Data.Argonaut.Decode (decodeJson)
-import Data.Argonaut.Encode (encodeJson)
 import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Foldable (foldr, for_)
 import Data.StrMap.ST as STMap
-import Data.Maybe (Maybe(..), isJust)
+import Data.Maybe (Maybe(..))
 import Data.Set as Set
 import Data.String as Str
 import Control.Monad.Eff (Eff)
@@ -17,6 +15,7 @@ import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Console as Console
 import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.ST (ST)
+import Control.Monad.ST as ST
 import Control.Apply ((*>))
 import Node.Process (PROCESS)
 import Node.Process as Process
@@ -150,28 +149,33 @@ type MainEff h eff =
   )
 
 main :: forall h eff. Eff (MainEff h eff) Unit
-main = do
+main = void do
   cwd <- Process.cwd
   argv <- Array.drop 2 <$> Process.argv
-  files <- STMap.new
   { extra, opts, psc, showSource } <- parseOptions (defaultOptions { cwd = cwd }) argv
+  child <- Child.spawn psc (Array.cons "--json-errors" extra) Child.defaultSpawnOptions
+  files <- STMap.new
+  buffer <- ST.newSTRef ""
 
-  -- We gotta quote everything again for exec
-  let command = Str.joinWith " " $ [psc, "--json-errors"] <> (printJson <<< encodeJson <$> extra)
-      execOpts = Child.defaultExecOptions { maxBuffer = Just top }
+  Stream.pipe (Child.stdout child) Process.stdout
 
-  Child.exec command execOpts \result -> do
-    stderr <- Str.split "\n" <$> Buffer.toString Encoding.UTF8 result.stderr
-    for_ stderr \err ->
-      case jsonParser err >>= decodeJson >>= parsePsaResult of
-        Left _ -> Console.error err
-        Right out -> do
-          out' <- output (if showSource then loadLines files else loadNothing) opts out
-          DefaultPrinter.print opts out'
+  Stream.onDataString (Child.stderr child) Encoding.UTF8 \chunk ->
+    void $ ST.modifySTRef buffer (<> chunk)
 
-    if isJust result.error
-      then Process.exit 1
-      else Process.exit 0
+  Child.onExit child \status ->
+    case status of
+      Child.Normally n -> do
+        stderr <- Str.split "\n" <$> ST.readSTRef buffer
+        for_ stderr \err ->
+          case jsonParser err >>= decodeJson >>= parsePsaResult of
+            Left _ -> Console.error err
+            Right out -> do
+              out' <- output (if showSource then loadLines files else loadNothing) opts out
+              DefaultPrinter.print opts out'
+        Process.exit n
+      Child.BySignal s -> do
+        Console.error (show s)
+        Process.exit 1
 
   where
   loadNothing _ _ = pure Nothing
@@ -185,4 +189,5 @@ main = do
           lines <- Str.split "\n" <$> File.readTextFile Encoding.UTF8 filename
           STMap.poke files filename lines
           pure lines
+
     pure $ Just $ Array.slice (pos.startLine - 1) (pos.endLine) contents
