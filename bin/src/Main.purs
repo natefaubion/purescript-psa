@@ -1,14 +1,17 @@
 module Main where
 
-import Prelude (Unit, pure, bind, otherwise, void, show, (>>=), (<$>), (<>), ($), (-), (||), (==))
+import Prelude (Unit, pure, bind, otherwise, void, show, id, flip, const, (>>=), (<$>), (<>), ($), (-), (||), (==))
+import Data.Argonaut.Printer (printJson)
 import Data.Argonaut.Parser (jsonParser)
 import Data.Argonaut.Decode (decodeJson)
+import Data.Argonaut.Encode (encodeJson)
 import Data.Array as Array
 import Data.Array.Unsafe (unsafeIndex)
-import Data.Either (Either(..))
+import Data.Either (Either(..), either)
 import Data.Foldable (foldr, for_)
+import Data.Traversable (traverse)
 import Data.StrMap.ST as STMap
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Set as Set
 import Data.String as Str
 import Control.Monad.Eff (Eff)
@@ -18,6 +21,7 @@ import Control.Monad.Eff.Exception (EXCEPTION)
 import Control.Monad.ST (ST)
 import Control.Monad.ST as ST
 import Control.Apply ((*>))
+import Control.Monad (when)
 import Node.Process (PROCESS)
 import Node.Process as Process
 import Node.ChildProcess (CHILD_PROCESS)
@@ -28,7 +32,7 @@ import Node.Buffer as Buffer
 import Node.Encoding as Encoding
 import Node.FS (FS)
 import Node.FS.Sync as File
-import Psa (PsaOptions, parsePsaResult, output)
+import Psa (PsaOptions, parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 
 foreign import version :: String
@@ -39,7 +43,7 @@ usage = """psa - Error/Warning reporting frontend for psc
 Usage: psa [--censor-lib] [--censor-src]
            [--censor-codes=CODES] [--filter-codes=CODES]
            [--no-colors] [--no-source]
-           [--lib-dir=DIR] [--psc=PSC]
+           [--lib-dir=DIR] [--psc=PSC] [--stash]
            PSC_OPTIONS
 
 Available options:
@@ -52,6 +56,8 @@ Available options:
   --filter-codes=CODES   Only show specific error codes
   --no-colors            Disable ANSI colors
   --no-source            Disable original source code printing
+  --stash                Enable persistent warnings
+  --stash=FILE           Enable persistent warnings using a specific stash file
   --lib-dir=DIR          Distinguishing key for lib sources (defaults to 'bower_components')
   --psc=PSC              Name of psc executable (defaults to 'psc')
 
@@ -76,6 +82,8 @@ type ParseOptions =
   , opts :: PsaOptions
   , psc :: String
   , showSource :: Boolean
+  , stash :: Boolean
+  , stashFile :: String
   }
 
 parseOptions
@@ -88,6 +96,8 @@ parseOptions opts =
     { extra: []
     , psc: "psc"
     , showSource: true
+    , stash: false
+    , stashFile: ".psa-stash"
     , opts
     }
   where
@@ -97,6 +107,9 @@ parseOptions opts =
 
     | arg == "--help" || arg == "-h" =
       Console.log usage *> Process.exit 0
+
+    | arg == "--stash" =
+      pure p { stash = true }
 
     | arg == "--no-source" =
       pure p { showSource = false }
@@ -125,11 +138,11 @@ parseOptions opts =
     | isPrefix "--lib-dir=" arg =
       pure p { opts = p.opts { libDir = Str.drop 10 arg } }
 
-    | isPrefix "--lib-dir=" arg =
-      pure p { opts = p.opts { libDir = Str.drop 10 arg } }
-
     | isPrefix "--psc=" arg =
       pure p { psc = Str.drop 6 arg }
+
+    | isPrefix "--stash=" arg =
+      pure p { stash = true, stashFile = Str.drop 8 arg }
 
     | otherwise = pure p { extra = Array.snoc p.extra arg }
 
@@ -153,9 +166,21 @@ main :: forall h eff. Eff (MainEff h eff) Unit
 main = void do
   cwd <- Process.cwd
   argv <- Array.drop 2 <$> Process.argv
-  { extra, opts, psc, showSource } <- parseOptions (defaultOptions { cwd = cwd }) argv
+
+  { extra
+  , opts
+  , psc
+  , showSource
+  , stash
+  , stashFile
+  } <- parseOptions (defaultOptions { cwd = cwd }) argv
+
+  stashData <-
+    if stash
+      then either (const []) id <$> readStashFile stashFile
+      else pure []
+
   child <- Child.spawn psc (Array.cons "--json-errors" extra) Child.defaultSpawnOptions { stdio = stdio }
-  files <- STMap.new
   buffer <- ST.newSTRef ""
 
   Stream.onDataString (Child.stderr child) Encoding.UTF8 \chunk ->
@@ -169,9 +194,14 @@ main = void do
           case jsonParser err >>= decodeJson >>= parsePsaResult of
             Left _ -> Console.error err
             Right out -> do
-              out' <- output (if showSource then loadLines files else loadNothing) opts out
+              files <- STMap.new
+              let loadLinesImpl = if showSource then loadLines files else loadNothing
+              merged <- mergeWarnings stashData out.warnings
+              out' <- output loadLinesImpl opts out { warnings = merged }
+              when stash $ writeStashFile stashFile merged
               DefaultPrinter.print opts out'
         Process.exit n
+
       Child.BySignal s -> do
         Console.error (show s)
         Process.exit 1
@@ -189,5 +219,41 @@ main = void do
           lines <- Str.split "\n" <$> File.readTextFile Encoding.UTF8 filename
           STMap.poke files filename lines
           pure lines
+    let source = Array.slice (pos.startLine - 1) (pos.endLine) contents
+    pure $ Just source
 
-    pure $ Just $ Array.slice (pos.startLine - 1) (pos.endLine) contents
+  decodeStash s = jsonParser s >>= decodeJson >>= traverse parsePsaError
+  encodeStash s = encodeJson (encodePsaError <$> s)
+
+  readStashFile stashFile = do
+    stat <- File.exists stashFile
+    if stat
+      then do
+        file <- File.readTextFile Encoding.UTF8 stashFile
+        pure $ decodeStash file
+      else
+        pure $ Left (stashFile <> " does not exist")
+
+  writeStashFile stashFile warnings = do
+    let file = printJson (encodeStash warnings)
+    File.writeTextFile Encoding.UTF8 stashFile file
+
+  mergeWarnings old new = do
+    let filenames = foldr (\x s -> maybe s (flip Set.insert s) x.filename) Set.empty new
+    fileStat <- STMap.new
+    old' <- flip Array.filterM old \x ->
+      case x.filename of
+        Nothing -> pure false
+        Just f ->
+          if Set.member f filenames then do
+            pure false
+          else do
+            stat <- STMap.peek fileStat f
+            case stat of
+              Just s -> pure s
+              Nothing -> do
+                stat' <- File.exists f
+                STMap.poke fileStat f stat'
+                pure stat'
+    pure $ old' <> new
+

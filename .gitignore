@@ -5,3 +5,4 @@
 /.psci*
 /src/.webpack.js
 npm-debug.log
+.psa-stash

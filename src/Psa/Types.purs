@@ -10,15 +10,32 @@ module Psa.Types
   , Position
   , Lines
   , parsePsaResult
+  , parsePsaError
+  , encodePsaError
+  , compareByLocation
   ) where
 
-import Prelude ((<*>), (<$>), map, ($), pure, (>>=))
-import Data.Argonaut.Core (JObject)
+import Prelude
+  ( map, pure, bind, unit, void, eq, compare
+  , (<*>), (<$>), ($), (>>=)
+  , class Eq, class Ord
+  , Ordering(..)
+  )
+import Data.Argonaut.Core (Json, JObject, jsonNull)
 import Data.Argonaut.Combinators ((.?))
+import Data.Argonaut.Encode (encodeJson)
+import Data.Array as Array
+import Data.StrMap as StrMap
+import Data.StrMap.ST as STMap
+import Data.StrMap.ST.Unsafe as STMap
 import Data.Either (Either)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Set (Set)
+import Data.Foldable (for_)
 import Data.Traversable (traverse)
+import Data.Tuple (Tuple(..))
+import Control.Monad.Eff (runPure)
+import Unsafe.Coerce (unsafeCoerce)
 
 type ErrorCode = String
 type ModuleName = String
@@ -33,6 +50,22 @@ data PsaPath
   = Src String
   | Lib String
   | Unknown
+
+instance eqPsaPath :: Eq PsaPath where
+  eq (Src a) (Src b) = eq a b
+  eq (Lib a) (Lib b) = eq a b
+  eq Unknown Unknown = true
+  eq _       _       = false
+
+instance ordPsaPath :: Ord PsaPath where
+  compare (Src a) (Src b) = compare a b
+  compare (Src _) (Lib _) = GT
+  compare (Src _) Unknown = GT
+  compare (Lib _) (Src _) = LT
+  compare (Lib a) (Lib b) = compare a b
+  compare (Lib _) Unknown = GT
+  compare Unknown Unknown = EQ
+  compare Unknown _       = LT
 
 type PsaOptions =
   { ansi :: Boolean
@@ -72,6 +105,19 @@ type Position =
   , endColumn :: Int
   }
 
+compareByLocation :: PsaAnnotedError -> PsaAnnotedError -> Ordering
+compareByLocation err1 err2 =
+  case compare err1.path err2.path of
+    EQ ->
+      case err1.position, err2.position of
+        Nothing, Nothing -> EQ
+        Nothing, _       -> LT
+        _      , Nothing -> GT
+        Just a , Just b  ->
+          compare (Tuple a.startLine a.startColumn)
+                  (Tuple b.startLine b.startColumn)
+    x  -> x
+
 parsePsaResult :: JObject -> Either String PsaResult
 parsePsaResult obj =
   { warnings: _
@@ -103,3 +149,15 @@ parsePosition =
       <*> obj .? "startColumn"
       <*> obj .? "endLine"
       <*> obj .? "endColumn"
+
+encodePsaError :: PsaError -> Json
+encodePsaError error = encodeJson $ runPure $ StrMap.runST do
+  obj <- STMap.new
+  STMap.poke obj "moduleName"  $ encodeJson error.moduleName
+  STMap.poke obj "errorCode"   $ encodeJson error.errorCode
+  STMap.poke obj "message"     $ encodeJson error.message
+  STMap.poke obj "filename"    $ encodeJson error.filename
+  STMap.poke obj "position"    $ encodeJson (maybe jsonNull encodePosition error.position)
+
+encodePosition :: Position -> Json
+encodePosition = unsafeCoerce

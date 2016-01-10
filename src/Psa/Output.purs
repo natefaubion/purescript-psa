@@ -12,7 +12,8 @@ import Data.Set as Set
 import Data.String as Str
 import Data.Array as Array
 import Node.Path as Path
-import Psa.Types (PsaOptions, PsaError, PsaAnnotedError, PsaPath(..), PsaResult, Position, Filename, Lines)
+import Psa.Types (PsaOptions, PsaError, PsaAnnotedError, PsaPath(..), PsaResult, Position, Filename, Lines,
+                  compareByLocation)
 
 data ErrorTag = Error | Warning
 
@@ -58,6 +59,9 @@ output loadLines options result = do
   state  <- Array.foldM (onError Warning) initialState result.warnings
   state' <- Array.foldM (onError Error) state result.errors
   pure state'
+    { warnings = Array.sortBy compareByLocation state'.warnings
+    , errors = Array.sortBy compareByLocation state'.errors
+    }
 
   where
   onError :: ErrorTag -> Output -> PsaError -> m Output
