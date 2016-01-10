@@ -7,6 +7,7 @@ A pretty, flexible error/warning reporting frontend for the PureScript compiler
 * Colors!
 * Original source spans in errors
 * Fine-grained warning filtering
+* Warning persistence
 
 **Note:** This requires the latest version (`0.8.0.0`) of `psc` which has not
 been released yet. It's recommended to use this with `master` until then.
