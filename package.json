@@ -5,6 +5,7 @@
   "keywords": ["purescript", "psc"],
   "author": "Nathan Faubion <nathan@n-son.com> (https://github.com/natefaubion/)",
   "license": "MIT",
+  "repository": "natefaubion/purescript-psa",
   "bin": {
     "psa": "index.js"
   },
