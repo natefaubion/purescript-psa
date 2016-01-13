@@ -201,7 +201,8 @@ main = void do
             Right out -> do
               files <- STMap.new
               let loadLinesImpl = if showSource then loadLines files else loadNothing
-              merged <- mergeWarnings stashData out.warnings
+                  filenames = insertFilenames (insertFilenames Set.empty out.errors) out.warnings
+              merged <- mergeWarnings filenames stashData out.warnings
               out' <- output loadLinesImpl opts out { warnings = merged }
               when stash $ writeStashFile stashFile merged
               DefaultPrinter.print opts out'
@@ -212,6 +213,7 @@ main = void do
         Process.exit 1
 
   where
+  insertFilenames = foldr \x s -> maybe s (flip Set.insert s) x.filename
   stdio = [ Just Child.Pipe, unsafeIndex Child.inherit 1, Just Child.Pipe ]
   loadNothing _ _ = pure Nothing
 
@@ -243,22 +245,21 @@ main = void do
     let file = printJson (encodeStash warnings)
     File.writeTextFile Encoding.UTF8 stashFile file
 
-  mergeWarnings old new = do
-    let filenames = foldr (\x s -> maybe s (flip Set.insert s) x.filename) Set.empty new
+  mergeWarnings filenames old new = do
     fileStat <- STMap.new
     old' <- flip Array.filterM old \x ->
       case x.filename of
         Nothing -> pure false
         Just f ->
-          if Set.member f filenames then do
-            pure false
-          else do
-            stat <- STMap.peek fileStat f
-            case stat of
-              Just s -> pure s
-              Nothing -> do
-                stat' <- File.exists f
-                STMap.poke fileStat f stat'
-                pure stat'
+          if Set.member f filenames
+            then pure false
+            else do
+              stat <- STMap.peek fileStat f
+              case stat of
+                Just s -> pure s
+                Nothing -> do
+                  stat' <- File.exists f
+                  STMap.poke fileStat f stat'
+                  pure stat'
     pure $ old' <> new
 
