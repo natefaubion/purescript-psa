@@ -14,7 +14,7 @@ module Psa.Printer
   ) where
 
 import Prelude (class Semigroup, (-), (<>), (>), ($), show, (+), (<$>))
-import Ansi.Output (foreground)
+import Ansi.Output (foreground, dim)
 import Ansi.Codes as Ansi
 import Data.Monoid (class Monoid)
 import Data.Array as Array
@@ -86,7 +86,7 @@ renderSource pos lines = renderAnnotation (gutter + 2) pos source'
   source'  =
     if Array.length source > 7
       then Array.take 3 source
-        <> [[ plain $ replicate (gutter + 2) " " , style (foreground Ansi.Grey) "..." ]]
+        <> [[ plain $ replicate (gutter + 2) " " , style dim "..." ]]
         <> Array.drop (Array.length source - 3) source
       else source
 
@@ -105,7 +105,7 @@ renderAnnotation offset pos lines = para
 
 sourceLine :: Int -> String -> Int -> String -> Array AnsiText
 sourceLine gutter sep num code =
-  [ style (foreground Ansi.Grey) $ padLeft gutter (show num) <> sep
+  [ style dim $ padLeft gutter (show num) <> sep
   , plain code
   ]
 

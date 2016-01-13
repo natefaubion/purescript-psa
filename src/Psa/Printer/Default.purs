@@ -17,7 +17,7 @@ import Data.StrMap as StrMap
 import Data.Tuple (Tuple(..))
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console as Console
-import Ansi.Output (foreground)
+import Ansi.Output (foreground, dim)
 import Ansi.Codes as Ansi
 import Psa.Types (Lines, Position, PsaAnnotedError, PsaOptions, PsaPath(..))
 import Psa.Output (OutputStats, Output)
@@ -85,9 +85,9 @@ renderPath _       = plain ""
 
 renderPosition :: Position -> Array AnsiText
 renderPosition pos =
-  [ style (foreground Ansi.Grey) ":"
+  [ style dim ":"
   , plain (show pos.startLine)
-  , style (foreground Ansi.Grey) ":"
+  , style dim ":"
   , plain (show pos.startColumn)
   ]
 
@@ -170,5 +170,5 @@ renderStat (Tuple 0 0) = [ style (foreground Ansi.Green) "0" ]
 renderStat (Tuple a b) | a == b = [ plain $ show a ]
 renderStat (Tuple a b) =
   [ plain $ show a
-  , style (foreground Ansi.Grey) $ "/" <> show b
+  , style dim $ "/" <> show b
   ]
