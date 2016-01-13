@@ -1,3 +1,8 @@
+### v0.2.0 (2016-1-12)
+
+* Fix stale stash bug
+* Add `--verbose-stats` flag
+
 ### v0.1.3 (2016-1-10)
 
 * Add `--stash` options for persisting warnings
