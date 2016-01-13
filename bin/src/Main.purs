@@ -49,6 +49,7 @@ Usage: psa [--censor-lib] [--censor-src]
 Available options:
   -v,--version           Show the version number
   -h,--help              Show this help text
+  --verbose-stats        Show counts for each warning type
   --censor-warnings      Censor all warnings
   --censor-lib           Censor warnings from library sources
   --censor-src           Censor warnings from project sources
@@ -73,6 +74,7 @@ defaultOptions =
   , censorSrc: false
   , censorCodes: Set.empty
   , filterCodes: Set.empty
+  , verboseStats: false
   , libDir: "bower_components"
   , cwd: ""
   }
@@ -116,6 +118,9 @@ parseOptions opts =
 
     | arg == "--no-colors" =
       pure p { opts = p.opts { ansi = false } }
+
+    | arg == "--verbose-stats" =
+      pure p { opts = p.opts { verboseStats = true } }
 
     | arg == "--censor-warnings" =
       pure p { opts = p.opts { censorWarnings = true } }

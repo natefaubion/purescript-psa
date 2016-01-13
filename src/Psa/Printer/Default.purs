@@ -2,6 +2,7 @@ module Psa.Printer.Default
   ( renderWarning
   , renderError
   , renderStats
+  , renderVerboseStats
   , print
   ) where
 
@@ -12,6 +13,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import Data.String as Str
 import Data.String.Regex as Regex
+import Data.StrMap as StrMap
 import Data.Tuple (Tuple(..))
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console as Console
@@ -34,7 +36,9 @@ print options output = do
     Console.error $ toString (renderError lenErrors (i + 1) error)
     Console.error ""
 
-  Console.log $ toString (renderStats output.stats)
+  if options.verboseStats
+    then Console.log $ toString (renderVerboseStats output.stats)
+    else Console.log $ toString (renderStats output.stats)
 
   where
   lenWarnings = Array.length output.warnings
@@ -91,32 +95,64 @@ renderSource' :: Position -> Lines -> Rendered
 renderSource' pos lines = renderSource pos lines <> emptyLine
 
 renderStats :: OutputStats -> Rendered
-renderStats stats = para $
-  catRow `map`
-    alignLeft
-      [ [ plain "" ]
-      , [ style (foreground Ansi.Yellow) "Warnings" ]
-      , [ style (foreground Ansi.Red) "Errors" ]
+renderStats stats =
+  renderStatCols
+    [ [ style (foreground Ansi.Yellow) "Warnings" ]
+    , [ style (foreground Ansi.Red) "Errors" ]
+    ]
+    [ renderStat srcWarnings
+    , renderStat srcErrors
+    ]
+    [ renderStat libWarnings
+    , renderStat libErrors
+    ]
+    [ renderStat allWarnings
+    , renderStat allErrors
+    ]
+  where
+  sumRatio (Tuple a b) _ (Tuple c d) = Tuple (a + c) (b + d)
+  srcWarnings = StrMap.fold sumRatio (Tuple 0 0) stats.srcWarnings
+  srcErrors   = StrMap.fold sumRatio (Tuple 0 0) stats.srcErrors
+  libWarnings = StrMap.fold sumRatio (Tuple 0 0) stats.libWarnings
+  libErrors   = StrMap.fold sumRatio (Tuple 0 0) stats.libErrors
+  allWarnings = StrMap.fold sumRatio (Tuple 0 0) stats.allWarnings
+  allErrors   = StrMap.fold sumRatio (Tuple 0 0) stats.allErrors
 
-      ]
+renderVerboseStats :: OutputStats -> Rendered
+renderVerboseStats stats =
+  renderStatCols
+    (warningLabels <> errorLabels)
+    (srcWarnings <> srcErrors)
+    (libWarnings <> libErrors)
+    (allWarnings <> allErrors)
+  where
+  warnings = Array.sort (StrMap.keys stats.allWarnings)
+  errors   = Array.sort (StrMap.keys stats.allErrors)
+
+  warningLabels = Array.singleton <<< style (foreground Ansi.Yellow) <$> warnings
+  errorLabels   = Array.singleton <<< style (foreground Ansi.Red) <$> errors
+
+  getStat key x = fromMaybe (Tuple 0 0) $ StrMap.lookup key x
+  getStats ks x = (\k -> renderStat $ getStat k x) <$> ks
+
+  srcWarnings = getStats warnings stats.srcWarnings
+  srcErrors   = getStats errors   stats.srcErrors
+  libWarnings = getStats warnings stats.libWarnings
+  libErrors   = getStats errors   stats.libErrors
+  allWarnings = getStats warnings stats.allWarnings
+  allErrors   = getStats errors   stats.allErrors
+
+renderStatCols :: Array (Array AnsiText) -> Array (Array AnsiText) -> Array (Array AnsiText) -> Array (Array AnsiText) -> Rendered
+renderStatCols col1 col2 col3 col4 = para $
+  catRow `map`
+    alignLeft ([[ plain "" ]] <> col1)
   `Array.zipWith ($)`
-    alignLeft
-      [ [ plain "Src" ]
-      , renderStat stats.srcWarnings
-      , renderStat stats.srcErrors
-      ]
+    alignLeft ([[ plain "Src" ]] <> col2)
   `Array.zipWith ($)`
-    alignLeft
-      [ [ plain "Lib" ]
-      , renderStat stats.libWarnings
-      , renderStat stats.libErrors
-      ]
+    alignLeft ([[ plain "Lib" ]] <> col3)
   `Array.zipWith ($)`
-    alignLeft
-      [ [ plain "All" ]
-      , renderStat stats.allWarnings
-      , renderStat stats.allErrors
-      ]
+    alignLeft ([[ plain "All" ]] <> col4)
+
   where
   gutter = [ plain "   " ]
   catRow c1 c2 c3 c4 =

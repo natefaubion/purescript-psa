@@ -10,6 +10,7 @@ import Data.Maybe (maybe, Maybe(..), fromMaybe)
 import Data.Tuple (Tuple(..))
 import Data.Set as Set
 import Data.String as Str
+import Data.StrMap as StrMap
 import Data.Array as Array
 import Node.Path as Path
 import Psa.Types (PsaOptions, PsaError, PsaAnnotedError, PsaPath(..), PsaResult, Position, Filename, Lines,
@@ -25,22 +26,22 @@ type Output =
 
 -- | Statistics are a ratio of errors shown to errors in total.
 type OutputStats =
-  { allWarnings :: Tuple Int Int
-  , allErrors   :: Tuple Int Int
-  , srcWarnings :: Tuple Int Int
-  , srcErrors   :: Tuple Int Int
-  , libWarnings :: Tuple Int Int
-  , libErrors   :: Tuple Int Int
+  { allWarnings :: StrMap.StrMap (Tuple Int Int)
+  , allErrors   :: StrMap.StrMap (Tuple Int Int)
+  , srcWarnings :: StrMap.StrMap (Tuple Int Int)
+  , srcErrors   :: StrMap.StrMap (Tuple Int Int)
+  , libWarnings :: StrMap.StrMap (Tuple Int Int)
+  , libErrors   :: StrMap.StrMap (Tuple Int Int)
   }
 
 initialStats :: OutputStats
 initialStats =
-  { allWarnings: Tuple 0 0
-  , allErrors:   Tuple 0 0
-  , srcWarnings: Tuple 0 0
-  , srcErrors:   Tuple 0 0
-  , libWarnings: Tuple 0 0
-  , libErrors:   Tuple 0 0
+  { allWarnings: StrMap.empty
+  , allErrors:   StrMap.empty
+  , srcWarnings: StrMap.empty
+  , srcErrors:   StrMap.empty
+  , libWarnings: StrMap.empty
+  , libErrors:   StrMap.empty
   }
 
 -- | Annotates a error/warning result set with original source lines, better
@@ -86,26 +87,29 @@ output loadLines options result = do
         (_ { stats = stats, warnings = state.warnings <> log })
         tag state
       where
-      stats = updateStats tag path (not (Array.null log)) state.stats
+      stats = updateStats tag path error.errorCode (not (Array.null log)) state.stats
 
 updateStats
   :: ErrorTag
   -> PsaPath
+  -> String
   -> Boolean -- If the error was printed
   -> OutputStats
   -> OutputStats
-updateStats tag path printed s =
-  { allWarnings: onTag id bump tag s.allWarnings
-  , allErrors:   onTag bump id tag s.allErrors
-  , srcWarnings: onTag id (onPath bump id path) tag s.srcWarnings
-  , srcErrors:   onTag (onPath bump id path) id tag s.srcErrors
-  , libWarnings: onTag id (onPath id bump path) tag s.libWarnings
-  , libErrors:   onTag (onPath id bump path) id tag s.libErrors
+updateStats tag path code printed s =
+  { allWarnings: onTag id bumpCode tag s.allWarnings
+  , allErrors:   onTag bumpCode id tag s.allErrors
+  , srcWarnings: onTag id (onPath bumpCode id path) tag s.srcWarnings
+  , srcErrors:   onTag (onPath bumpCode id path) id tag s.srcErrors
+  , libWarnings: onTag id (onPath id bumpCode path) tag s.libWarnings
+  , libErrors:   onTag (onPath id bumpCode path) id tag s.libErrors
   }
 
   where
-  bump :: Tuple Int Int -> Tuple Int Int
+  bumpCode = StrMap.alter alterStat code
   bump (Tuple a b) = Tuple (if printed then a + 1 else a) (b + 1)
+  alterStat Nothing  = Just (bump (Tuple 0 0))
+  alterStat (Just x) = Just (bump x)
 
 shouldShowError :: PsaOptions -> ErrorTag -> PsaPath -> String -> Boolean
 shouldShowError { filterCodes, censorCodes, censorSrc, censorLib, censorWarnings } tag path code =

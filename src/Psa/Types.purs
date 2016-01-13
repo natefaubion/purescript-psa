@@ -16,7 +16,7 @@ module Psa.Types
   ) where
 
 import Prelude
-  ( map, pure, bind, unit, void, eq, compare
+  ( map, pure, bind, eq, compare
   , (<*>), (<$>), ($), (>>=)
   , class Eq, class Ord
   , Ordering(..)
@@ -31,7 +31,6 @@ import Data.StrMap.ST.Unsafe as STMap
 import Data.Either (Either)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Set (Set)
-import Data.Foldable (for_)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Control.Monad.Eff (runPure)
@@ -74,6 +73,7 @@ type PsaOptions =
   , censorSrc :: Boolean
   , censorCodes :: Set ErrorCode
   , filterCodes :: Set ErrorCode
+  , verboseStats :: Boolean
   , libDir :: String
   , cwd :: String
   }
