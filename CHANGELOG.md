@@ -1,3 +1,7 @@
+### v0.2.1 (2016-1-18)
+
+* Always print to stderr
+
 ### v0.2.0 (2016-1-12)
 
 * Fix stale stash bug
