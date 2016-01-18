@@ -24,8 +24,7 @@ import Psa.Output (OutputStats, Output)
 import Psa.Printer (Rendered, AnsiText, ansiLength, renderSource, plain, style, indent, line, para, renderAnsi, renderRow)
 import Psa.Util (replicate, iter_)
 
--- | Prints output to the console. Errors and warnings will be directed to
--- | stderr, while statistics will be directed to stdout.
+-- | Prints output to the console.
 print :: forall eff. PsaOptions -> Output -> Eff (console :: Console.CONSOLE | eff) Unit
 print options output = do
   iter_ output.warnings \i warning -> do
@@ -36,14 +35,13 @@ print options output = do
     Console.error $ toString (renderError lenErrors (i + 1) error)
     Console.error ""
 
-  if options.verboseStats
-    then Console.log $ toString (renderVerboseStats output.stats)
-    else Console.log $ toString (renderStats output.stats)
+  Console.error $ toString (renderStats' output.stats)
 
   where
   lenWarnings = Array.length output.warnings
   lenErrors = Array.length output.errors
   toString = renderRow (Str.joinWith "" <<< map (renderAnsi options.ansi))
+  renderStats' = if options.verboseStats then renderVerboseStats else renderStats
 
 renderWarning :: Int -> Int -> PsaAnnotedError -> Rendered
 renderWarning = render (foreground Ansi.Yellow)
