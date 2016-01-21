@@ -10,6 +10,7 @@ import Data.Array.Unsafe (unsafeIndex)
 import Data.Either (Either(..), either)
 import Data.Foldable (foldr, for_)
 import Data.Traversable (traverse)
+import Data.StrMap as StrMap
 import Data.StrMap.ST as STMap
 import Data.Maybe (Maybe(..), maybe)
 import Data.Set as Set
@@ -43,7 +44,7 @@ usage = """psa - Error/Warning reporting frontend for psc
 Usage: psa [--censor-lib] [--censor-src]
            [--censor-codes=CODES] [--filter-codes=CODES]
            [--no-colors] [--no-source]
-           [--lib-dir=DIR] [--psc=PSC] [--stash]
+           [--is-lib=DIR] [--psc=PSC] [--stash]
            PSC_OPTIONS
 
 Available options:
@@ -57,9 +58,10 @@ Available options:
   --filter-codes=CODES   Only show specific error codes
   --no-colors            Disable ANSI colors
   --no-source            Disable original source code printing
-  --stash                Enable persistent warnings
+  --strict               Promotes src warnings to errors
+  --stash                Enable persistent warnings (defaults to .psa-stash)
   --stash=FILE           Enable persistent warnings using a specific stash file
-  --lib-dir=DIR          Distinguishing key for lib sources (defaults to 'bower_components')
+  --is-lib=DIR           Distinguishing key for lib sources (defaults to 'bower_components')
   --psc=PSC              Name of psc executable (defaults to 'psc')
 
   CODES                  Comma-separated list of psc error codes
@@ -76,6 +78,7 @@ defaultOptions =
   , filterCodes: Set.empty
   , verboseStats: false
   , libDir: "bower_components"
+  , strict: false
   , cwd: ""
   }
 
@@ -122,6 +125,9 @@ parseOptions opts =
     | arg == "--verbose-stats" =
       pure p { opts = p.opts { verboseStats = true } }
 
+    | arg == "--strict" =
+      pure p { opts = p.opts { strict = true } }
+
     | arg == "--censor-warnings" =
       pure p { opts = p.opts { censorWarnings = true } }
 
@@ -140,8 +146,8 @@ parseOptions opts =
     | isPrefix "--filter-codes=" arg =
       pure p { opts = p.opts { filterCodes = foldr Set.insert p.opts.filterCodes (Str.split "," (Str.drop 15 arg)) } }
 
-    | isPrefix "--lib-dir=" arg =
-      pure p { opts = p.opts { libDir = Str.drop 10 arg } }
+    | isPrefix "--is-lib=" arg =
+      pure p { opts = p.opts { libDir = Str.drop 9 arg } }
 
     | isPrefix "--psc=" arg =
       pure p { psc = Str.drop 6 arg }
@@ -206,6 +212,9 @@ main = void do
               out' <- output loadLinesImpl opts out { warnings = merged }
               when stash $ writeStashFile stashFile merged
               DefaultPrinter.print opts out'
+              if StrMap.isEmpty out'.stats.allErrors
+                then Process.exit 0
+                else Process.exit 1
         Process.exit n
 
       Child.BySignal s -> do

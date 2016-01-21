@@ -75,6 +75,7 @@ type PsaOptions =
   , filterCodes :: Set ErrorCode
   , verboseStats :: Boolean
   , libDir :: String
+  , strict :: Boolean
   , cwd :: String
   }
 

@@ -7,7 +7,7 @@ module Psa.Output
 import Prelude (class Monad, bind, otherwise, not, pure, top, id, (||), (&&), ($), (+), (-), (<), (<=), (==), (<*>), (<$>), (<>), (<<<), (>>>))
 import Data.Foldable (foldl)
 import Data.Maybe (maybe, Maybe(..), fromMaybe)
-import Data.Tuple (Tuple(..))
+import Data.Tuple (Tuple(..), fst)
 import Data.Set as Set
 import Data.String as Str
 import Data.StrMap as StrMap
@@ -56,17 +56,35 @@ output
   -> PsaResult
   -> m Output
 output loadLines options result = do
-  let initialState = { warnings: [], errors: [], stats: initialStats }
-  state  <- Array.foldM (onError Warning) initialState result.warnings
-  state' <- Array.foldM (onError Error) state result.errors
+  state  <- Array.foldM (onError Warning) initialState result'.warnings
+  state' <- Array.foldM (onError Error) state result'.errors
   pure state'
     { warnings = Array.sortBy compareByLocation state'.warnings
     , errors = Array.sortBy compareByLocation state'.errors
     }
 
   where
-  onError :: ErrorTag -> Output -> PsaError -> m Output
-  onError tag state error =
+  initialState =
+    { warnings: []
+    , errors: []
+    , stats: initialStats
+    }
+
+  result' =
+    if not options.strict
+      then { warnings, errors }
+      else
+        let split = partition (isSrc <<< fst) warnings
+         in { warnings: split.fail, errors: errors <> split.pass }
+    where
+      warnings = pathOf <$> result.warnings
+      errors = pathOf <$> result.errors
+
+  pathOf :: PsaError -> Tuple PsaPath PsaError
+  pathOf x = Tuple (maybe Unknown (errorPath options.libDir <<< Path.relative options.cwd) x.filename) x
+
+  onError :: ErrorTag -> Output -> Tuple PsaPath PsaError -> m Output
+  onError tag state (Tuple path error) =
     if shouldShowError options tag path error.errorCode
       then do
         source <- fromMaybe (pure Nothing) (loadLines <$> error.filename <*> error.position)
@@ -77,9 +95,6 @@ output loadLines options result = do
         update []
 
     where
-    path :: PsaPath
-    path = maybe Unknown (errorPath options.libDir <<< Path.relative options.cwd) error.filename
-
     update :: Array PsaAnnotedError -> m Output
     update log =
       pure $ onTag
@@ -88,6 +103,14 @@ output loadLines options result = do
         tag state
       where
       stats = updateStats tag path error.errorCode (not (Array.null log)) state.stats
+
+partition :: forall a. (a -> Boolean) -> Array a -> { pass :: Array a, fail :: Array a }
+partition f = foldl go { pass: [], fail: [] }
+  where
+  go { pass, fail } x =
+    if f x
+      then { pass: Array.snoc pass x, fail }
+      else { pass, fail: Array.snoc fail x }
 
 updateStats
   :: ErrorTag
