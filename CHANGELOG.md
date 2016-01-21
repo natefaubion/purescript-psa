@@ -1,3 +1,8 @@
+### v0.3.0 (2016-1-20)
+
+* Add `--strict` flag
+* Change `--lib-dir` to `--is-lib` for clarity
+
 ### v0.2.1 (2016-1-18)
 
 * Always print to stderr
