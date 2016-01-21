@@ -47,6 +47,11 @@ Only show specific warning codes:
 psa --filter-codes=DeprecatedOperatorDecl,DeprecatedClassExport <psc-options>
 ```
 
+Turn source warnings into errors:
+```
+psa --strict <psc-options>
+```
+
 **Note:** It's assumed `psc` is in your path. If you'd like to use a custom
 binary location you can set the `--psc=/foo/bar/psc` flag.
 
