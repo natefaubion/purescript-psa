@@ -195,8 +195,6 @@ main = void do
 
   let opts' = opts { libDirs = (<> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
 
-  Console.print opts'.libDirs
-
   stashData <-
     if stash
       then either (const []) id <$> readStashFile stashFile
