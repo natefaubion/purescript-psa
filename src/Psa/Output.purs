@@ -5,8 +5,8 @@ module Psa.Output
   ) where
 
 import Prelude (class Monad, bind, otherwise, not, pure, top, id, (||), (&&), ($), (+), (-), (<), (<=), (==), (<*>), (<$>), (<>), (<<<), (>>>))
-import Data.Foldable (foldl)
-import Data.Maybe (maybe, Maybe(..), fromMaybe)
+import Data.Foldable (foldl, any)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Tuple (Tuple(..), fst)
 import Data.Set as Set
 import Data.String as Str
@@ -81,7 +81,11 @@ output loadLines options result = do
       errors = pathOf <$> result.errors
 
   pathOf :: PsaError -> Tuple PsaPath PsaError
-  pathOf x = Tuple (maybe Unknown (errorPath options.libDir <<< Path.relative options.cwd) x.filename) x
+  -- pathOf x = Tuple (maybe Unknown (errorPath options.libDirs <<< Path.relative options.cwd) x.filename) x
+  pathOf x =
+    case x.filename of
+      Just f  -> Tuple (errorPath options.libDirs f (Path.relative options.cwd f)) x
+      Nothing -> Tuple Unknown x
 
   onError :: ErrorTag -> Output -> Tuple PsaPath PsaError -> m Output
   onError tag state (Tuple path error) =
@@ -141,10 +145,16 @@ shouldShowError { filterCodes, censorCodes, censorSrc, censorLib, censorWarnings
   && (Set.isEmpty filterCodes || Set.member code filterCodes)
   && (Set.isEmpty censorCodes || not (Set.member code censorCodes))
 
-errorPath :: String -> String -> PsaPath
-errorPath lib s
-  | Str.contains lib s = Lib s
-  | otherwise          = Src s
+errorPath :: Array String -> String -> String -> PsaPath
+errorPath libDirs path short =
+  if any (path `startsWith`) libDirs
+    then Lib short
+    else Src short
+  where
+  startsWith s' s =
+    case Str.indexOf s s' of
+      Just 0 -> true
+      _      -> false
   
 onTag :: forall a b. (a -> b) -> (a -> b) -> ErrorTag -> a -> b
 onTag f g Error   x = f x

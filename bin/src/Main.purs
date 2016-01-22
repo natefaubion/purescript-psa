@@ -1,6 +1,6 @@
 module Main where
 
-import Prelude (Unit, pure, bind, otherwise, void, show, id, flip, const, (>>=), (<$>), (<>), ($), (-), (||), (==))
+import Prelude (Unit, pure, bind, otherwise, void, show, id, flip, const, (<<<), (>>=), (<$>), (<>), ($), (-), (||), (==))
 import Data.Argonaut.Printer (printJson)
 import Data.Argonaut.Parser (jsonParser)
 import Data.Argonaut.Decode (decodeJson)
@@ -29,10 +29,10 @@ import Node.ChildProcess (CHILD_PROCESS)
 import Node.ChildProcess as Child
 import Node.Stream as Stream
 import Node.Buffer (BUFFER)
-import Node.Buffer as Buffer
 import Node.Encoding as Encoding
 import Node.FS (FS)
 import Node.FS.Sync as File
+import Node.Path as Path
 import Psa (PsaOptions, parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 
@@ -61,7 +61,7 @@ Available options:
   --strict               Promotes src warnings to errors
   --stash                Enable persistent warnings (defaults to .psa-stash)
   --stash=FILE           Enable persistent warnings using a specific stash file
-  --is-lib=DIR           Distinguishing key for lib sources (defaults to 'bower_components')
+  --is-lib=DIR           Distinguishing library path (defaults to 'bower_components')
   --psc=PSC              Name of psc executable (defaults to 'psc')
 
   CODES                  Comma-separated list of psc error codes
@@ -77,7 +77,7 @@ defaultOptions =
   , censorCodes: Set.empty
   , filterCodes: Set.empty
   , verboseStats: false
-  , libDir: "bower_components"
+  , libDirs: []
   , strict: false
   , cwd: ""
   }
@@ -96,15 +96,17 @@ parseOptions
    . PsaOptions
   -> Array String
   -> Eff (console :: CONSOLE, process :: PROCESS | eff) ParseOptions
-parseOptions opts =
-  Array.foldM parse
-    { extra: []
-    , psc: "psc"
-    , showSource: true
-    , stash: false
-    , stashFile: ".psa-stash"
-    , opts
-    }
+parseOptions opts args =
+  defaultLibDir <$>
+    Array.foldM parse
+      { extra: []
+      , psc: "psc"
+      , showSource: true
+      , stash: false
+      , stashFile: ".psa-stash"
+      , opts
+      }
+      args
   where
   parse p arg
     | arg == "--version" || arg == "-v" =
@@ -119,7 +121,7 @@ parseOptions opts =
     | arg == "--no-source" =
       pure p { showSource = false }
 
-    | arg == "--no-colors" =
+    | arg == "--no-colors" || arg == "--monochrome" =
       pure p { opts = p.opts { ansi = false } }
 
     | arg == "--verbose-stats" =
@@ -147,7 +149,7 @@ parseOptions opts =
       pure p { opts = p.opts { filterCodes = foldr Set.insert p.opts.filterCodes (Str.split "," (Str.drop 15 arg)) } }
 
     | isPrefix "--is-lib=" arg =
-      pure p { opts = p.opts { libDir = Str.drop 9 arg } }
+      pure p { opts = p.opts { libDirs = Array.snoc p.opts.libDirs (Str.drop 9 arg) } }
 
     | isPrefix "--psc=" arg =
       pure p { psc = Str.drop 6 arg }
@@ -161,6 +163,11 @@ parseOptions opts =
     case Str.indexOf s str of
       Just x | x == 0 -> true
       _               -> false
+
+  defaultLibDir x
+    | Array.length x.opts.libDirs == 0 =
+      x { opts = x.opts { libDirs = [ "bower_components" ] } }
+    | otherwise = x
 
 type MainEff h eff =
   ( process :: PROCESS
@@ -186,6 +193,10 @@ main = void do
   , stashFile
   } <- parseOptions (defaultOptions { cwd = cwd }) argv
 
+  let opts' = opts { libDirs = (<> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
+
+  Console.print opts'.libDirs
+
   stashData <-
     if stash
       then either (const []) id <$> readStashFile stashFile
@@ -209,9 +220,9 @@ main = void do
               let loadLinesImpl = if showSource then loadLines files else loadNothing
                   filenames = insertFilenames (insertFilenames Set.empty out.errors) out.warnings
               merged <- mergeWarnings filenames stashData out.warnings
-              out' <- output loadLinesImpl opts out { warnings = merged }
+              out' <- output loadLinesImpl opts' out { warnings = merged }
               when stash $ writeStashFile stashFile merged
-              DefaultPrinter.print opts out'
+              DefaultPrinter.print opts' out'
               if StrMap.isEmpty out'.stats.allErrors
                 then Process.exit 0
                 else Process.exit 1

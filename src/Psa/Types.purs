@@ -24,10 +24,8 @@ import Prelude
 import Data.Argonaut.Core (Json, JObject, jsonNull)
 import Data.Argonaut.Combinators ((.?))
 import Data.Argonaut.Encode (encodeJson)
-import Data.Array as Array
 import Data.StrMap as StrMap
 import Data.StrMap.ST as STMap
-import Data.StrMap.ST.Unsafe as STMap
 import Data.Either (Either)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Set (Set)
@@ -74,7 +72,7 @@ type PsaOptions =
   , censorCodes :: Set ErrorCode
   , filterCodes :: Set ErrorCode
   , verboseStats :: Boolean
-  , libDir :: String
+  , libDirs :: Array String
   , strict :: Boolean
   , cwd :: String
   }

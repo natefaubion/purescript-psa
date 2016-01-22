@@ -12,7 +12,6 @@ import Data.Foldable (sum, maximum)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mempty)
 import Data.String as Str
-import Data.String.Regex as Regex
 import Data.StrMap as StrMap
 import Data.Tuple (Tuple(..))
 import Control.Monad.Eff (Eff)
