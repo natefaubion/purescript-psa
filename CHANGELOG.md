@@ -1,4 +1,4 @@
-### v0.3.1 (2016-1-22)
+### v0.3.2 (2016-1-22)
 
 * Better handling of `--is-lib` as a real directory
 
