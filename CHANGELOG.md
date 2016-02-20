@@ -1,3 +1,7 @@
+### v0.3.4 (2016-2-20)
+
+* Only read the stash file when `--stash` is set
+
 ### v0.3.3 (2016-2-20)
 
 * Purge stale `--stash` warnings based on file modification time
