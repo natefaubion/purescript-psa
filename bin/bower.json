@@ -18,6 +18,7 @@
     "purescript-node-streams": "~0.3.0",
     "purescript-st": "~0.1.1",
     "purescript-maps": "~0.5.4",
-    "purescript-node-child-process": "~0.5.0"
+    "purescript-node-child-process": "~0.5.0",
+    "purescript-datetime": "~0.9.1"
   }
 }

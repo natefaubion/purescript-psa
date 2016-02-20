@@ -1,13 +1,14 @@
 module Main where
 
-import Prelude (Unit, pure, bind, otherwise, void, show, id, flip, const, (<<<), (>>=), (<$>), (<>), ($), (-), (||), (==))
+import Prelude (Unit, pure, bind, otherwise, void, show, flip, const, (<<<), (>>=), (<$>), (<>), (>), ($), (-), (||), (==))
 import Data.Argonaut.Printer (printJson)
 import Data.Argonaut.Parser (jsonParser)
 import Data.Argonaut.Decode (decodeJson)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Array as Array
 import Data.Array.Unsafe (unsafeIndex)
-import Data.Either (Either(..), either)
+import Data.Date as Date
+import Data.Either (Either(..))
 import Data.Foldable (foldr, for_)
 import Data.Traversable (traverse)
 import Data.StrMap as StrMap
@@ -18,7 +19,7 @@ import Data.String as Str
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Console as Console
-import Control.Monad.Eff.Exception (EXCEPTION)
+import Control.Monad.Eff.Exception (EXCEPTION, Error, catchException)
 import Control.Monad.ST (ST)
 import Control.Monad.ST as ST
 import Control.Apply ((*>))
@@ -32,7 +33,9 @@ import Node.Buffer (BUFFER)
 import Node.Encoding as Encoding
 import Node.FS (FS)
 import Node.FS.Sync as File
+import Node.FS.Stats as Stats
 import Node.Path as Path
+import Unsafe.Coerce (unsafeCoerce)
 import Psa (PsaOptions, parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 
@@ -177,6 +180,7 @@ type MainEff h eff =
   , fs :: FS
   , cp :: CHILD_PROCESS
   , st :: ST h
+  , now :: Date.Now
   | eff
   )
 
@@ -195,11 +199,7 @@ main = void do
 
   let opts' = opts { libDirs = (<> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
 
-  stashData <-
-    if stash
-      then either (const []) id <$> readStashFile stashFile
-      else pure []
-
+  stashData <- readStashFile stashFile
   child <- Child.spawn psc (Array.cons "--json-errors" extra) Child.defaultSpawnOptions { stdio = stdio }
   buffer <- ST.newSTRef ""
 
@@ -217,7 +217,7 @@ main = void do
               files <- STMap.new
               let loadLinesImpl = if showSource then loadLines files else loadNothing
                   filenames = insertFilenames (insertFilenames Set.empty out.errors) out.warnings
-              merged <- mergeWarnings filenames stashData out.warnings
+              merged <- mergeWarnings filenames stashData.date stashData.stash out.warnings
               out' <- output loadLinesImpl opts' out { warnings = merged }
               when stash $ writeStashFile stashFile merged
               DefaultPrinter.print opts' out'
@@ -249,21 +249,20 @@ main = void do
 
   decodeStash s = jsonParser s >>= decodeJson >>= traverse parsePsaError
   encodeStash s = encodeJson (encodePsaError <$> s)
+  emptyStash    = { date: _ , stash: [] } <$> Date.now
 
-  readStashFile stashFile = do
-    stat <- File.exists stashFile
-    if stat
-      then do
-        file <- File.readTextFile Encoding.UTF8 stashFile
-        pure $ decodeStash file
-      else
-        pure $ Left (stashFile <> " does not exist")
+  readStashFile stashFile = catchException' (const emptyStash) do
+    stat <- File.stat stashFile
+    file <- File.readTextFile Encoding.UTF8 stashFile
+    case decodeStash file of
+      Left _ -> emptyStash
+      Right stash -> pure { date: Stats.modifiedTime stat, stash }
 
   writeStashFile stashFile warnings = do
     let file = printJson (encodeStash warnings)
     File.writeTextFile Encoding.UTF8 stashFile file
 
-  mergeWarnings filenames old new = do
+  mergeWarnings filenames date old new = do
     fileStat <- STMap.new
     old' <- flip Array.filterM old \x ->
       case x.filename of
@@ -276,8 +275,16 @@ main = void do
               case stat of
                 Just s -> pure s
                 Nothing -> do
-                  stat' <- File.exists f
-                  STMap.poke fileStat f stat'
-                  pure stat'
+                  s <- catchException' (\_ -> pure false) $
+                    (date >) <<< Stats.modifiedTime <$> File.stat f
+                  STMap.poke fileStat f s
+                  pure s
     pure $ old' <> new
 
+-- Due to `catchException` label annoyingness
+catchException'
+  :: forall a eff
+   . (Error -> Eff (err :: EXCEPTION | eff) a)
+  -> Eff (err :: EXCEPTION | eff) a
+  -> Eff (err :: EXCEPTION | eff) a
+catchException' eb eff = unsafeCoerce (catchException (unsafeCoerce eb) (unsafeCoerce eff))
