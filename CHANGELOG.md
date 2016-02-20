@@ -1,3 +1,7 @@
+### v0.3.3 (2016-2-20)
+
+* Purge stale `--stash` warnings based on file modification time
+
 ### v0.3.2 (2016-1-22)
 
 * Better handling of `--is-lib` as a real directory
