@@ -199,7 +199,11 @@ main = void do
 
   let opts' = opts { libDirs = (<> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
 
-  stashData <- readStashFile stashFile
+  stashData <-
+    if stash
+      then readStashFile stashFile
+      else emptyStash
+
   child <- Child.spawn psc (Array.cons "--json-errors" extra) Child.defaultSpawnOptions { stdio = stdio }
   buffer <- ST.newSTRef ""
 
