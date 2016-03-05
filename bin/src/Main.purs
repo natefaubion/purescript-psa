@@ -93,6 +93,7 @@ type ParseOptions =
   , showSource :: Boolean
   , stash :: Boolean
   , stashFile :: String
+  , jsonErrors :: Boolean
   }
 
 parseOptions
@@ -108,6 +109,7 @@ parseOptions opts args =
       , showSource: true
       , stash: false
       , stashFile: ".psa-stash"
+      , jsonErrors: false
       , opts
       }
       args
@@ -121,6 +123,9 @@ parseOptions opts args =
 
     | arg == "--stash" =
       pure p { stash = true }
+
+    | arg == "--json-errors" =
+      pure p { jsonErrors = true }
 
     | arg == "--no-source" =
       pure p { showSource = false }
@@ -196,6 +201,7 @@ main = void do
   , showSource
   , stash
   , stashFile
+  , jsonErrors
   } <- parseOptions (defaultOptions { cwd = cwd }) argv
 
   let opts' = opts { libDirs = (<> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
@@ -205,7 +211,6 @@ main = void do
     if stash
       then readStashFile stashFile
       else emptyStash
-
 
   spawn' psc args \buffer -> do
     let stderr = Str.split "\n" buffer
@@ -217,9 +222,11 @@ main = void do
           let loadLinesImpl = if showSource then loadLines files else loadNothing
               filenames = insertFilenames (insertFilenames Set.empty out.errors) out.warnings
           merged <- mergeWarnings filenames stashData.date stashData.stash out.warnings
-          out' <- output loadLinesImpl opts' out { warnings = merged }
           when stash $ writeStashFile stashFile merged
-          DefaultPrinter.print opts' out'
+          out' <- output loadLinesImpl opts' out { warnings = merged }
+          if jsonErrors
+            then Console.error err -- Just proxy psc's errors for tooling
+            else DefaultPrinter.print opts' out'
           if StrMap.isEmpty out'.stats.allErrors
             then Process.exit 0
             else Process.exit 1
