@@ -1,3 +1,8 @@
+### v0.3.5 (2016-3-5)
+
+* Retry with `.cmd` on Windows
+* Proxy psc output when called with `--json-errors` (for tooling)
+
 ### v0.3.4 (2016-2-20)
 
 * Only read the stash file when `--stash` is set
