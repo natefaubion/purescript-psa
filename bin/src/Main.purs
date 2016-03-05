@@ -1,6 +1,6 @@
 module Main where
 
-import Prelude (Unit, pure, bind, otherwise, void, show, flip, const, (<<<), (>>=), (<$>), (<>), (>), ($), (-), (||), (==))
+import Prelude
 import Data.Argonaut.Printer (printJson)
 import Data.Argonaut.Parser (jsonParser)
 import Data.Argonaut.Decode (decodeJson)
@@ -19,11 +19,12 @@ import Data.String as Str
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Console as Console
-import Control.Monad.Eff.Exception (EXCEPTION, Error, catchException)
+import Control.Monad.Eff.Exception (EXCEPTION, Error, catchException, throw, throwException, message)
 import Control.Monad.ST (ST)
 import Control.Monad.ST as ST
 import Control.Apply ((*>))
 import Control.Monad (when)
+import Node.Platform (Platform(Win32))
 import Node.Process (PROCESS)
 import Node.Process as Process
 import Node.ChildProcess (CHILD_PROCESS)
@@ -198,46 +199,63 @@ main = void do
   } <- parseOptions (defaultOptions { cwd = cwd }) argv
 
   let opts' = opts { libDirs = (<> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
+      args  = Array.cons "--json-errors" extra
 
   stashData <-
     if stash
       then readStashFile stashFile
       else emptyStash
 
-  child <- Child.spawn psc (Array.cons "--json-errors" extra) Child.defaultSpawnOptions { stdio = stdio }
-  buffer <- ST.newSTRef ""
 
-  Stream.onDataString (Child.stderr child) Encoding.UTF8 \chunk ->
-    void $ ST.modifySTRef buffer (<> chunk)
-
-  Child.onExit child \status ->
-    case status of
-      Child.Normally n -> do
-        stderr <- Str.split "\n" <$> ST.readSTRef buffer
-        for_ stderr \err ->
-          case jsonParser err >>= decodeJson >>= parsePsaResult of
-            Left _ -> Console.error err
-            Right out -> do
-              files <- STMap.new
-              let loadLinesImpl = if showSource then loadLines files else loadNothing
-                  filenames = insertFilenames (insertFilenames Set.empty out.errors) out.warnings
-              merged <- mergeWarnings filenames stashData.date stashData.stash out.warnings
-              out' <- output loadLinesImpl opts' out { warnings = merged }
-              when stash $ writeStashFile stashFile merged
-              DefaultPrinter.print opts' out'
-              if StrMap.isEmpty out'.stats.allErrors
-                then Process.exit 0
-                else Process.exit 1
-        Process.exit n
-
-      Child.BySignal s -> do
-        Console.error (show s)
-        Process.exit 1
+  spawn' psc args \buffer -> do
+    let stderr = Str.split "\n" buffer
+    for_ stderr \err ->
+      case jsonParser err >>= decodeJson >>= parsePsaResult of
+        Left _ -> Console.error err
+        Right out -> do
+          files <- STMap.new
+          let loadLinesImpl = if showSource then loadLines files else loadNothing
+              filenames = insertFilenames (insertFilenames Set.empty out.errors) out.warnings
+          merged <- mergeWarnings filenames stashData.date stashData.stash out.warnings
+          out' <- output loadLinesImpl opts' out { warnings = merged }
+          when stash $ writeStashFile stashFile merged
+          DefaultPrinter.print opts' out'
+          if StrMap.isEmpty out'.stats.allErrors
+            then Process.exit 0
+            else Process.exit 1
 
   where
   insertFilenames = foldr \x s -> maybe s (flip Set.insert s) x.filename
   stdio = [ Just Child.Pipe, unsafeIndex Child.inherit 1, Just Child.Pipe ]
   loadNothing _ _ = pure Nothing
+
+  spawn' cmd args onExit = do
+    child <- Child.spawn cmd args Child.defaultSpawnOptions { stdio = stdio }
+    buffer <- ST.newSTRef ""
+    Stream.onDataString (Child.stderr child) Encoding.UTF8 \chunk ->
+      void $ ST.modifySTRef buffer (<> chunk)
+    Child.onExit child \status ->
+      case status of
+        Child.Normally n -> do
+          ST.readSTRef buffer >>= onExit
+          Process.exit n
+        Child.BySignal s -> do
+          Console.error (show s)
+          Process.exit 1
+    Child.onError child (retryWithCmd cmd args onExit)
+
+  retryWithCmd cmd args onExit err
+    | err.code == "ENOENT" = do
+     -- On windows, if the executable wasn't found, try adding .cmd
+     if Process.platform == Win32
+       then
+         case Str.stripSuffix ".cmd" cmd of
+           Nothing      -> spawn' (cmd <> ".cmd") args onExit
+           Just bareCmd -> throw $ "`" <> bareCmd <> "` executable not found. (nor `" <> cmd <> "`)"
+       else
+         throw $ "`" <> cmd <> "` executable not found."
+    | otherwise =
+       throwException (Child.toStandardError err)
 
   -- TODO: Handle exceptions
   loadLines files filename pos = do
