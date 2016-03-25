@@ -229,7 +229,7 @@ trimPosition lines pos =
   trimComment col l =
     case Str.indexOf "--" l of
       Just x | x == 0        -> Nothing
-      Just x | x < (col - 1) -> Just (x + 1)
+      Just x | x < (col - 1) -> trimCol (x + 1) l
       _                      -> Just col
 
   isPunc ' ' = true
