@@ -12,13 +12,13 @@
   ],
   "dependencies": {
     "purescript-console": "^0.1.0",
-    "purescript-node-fs": "~0.10.0",
+    "purescript-node-fs": "~0.11.0",
     "purescript-node-buffer": "~0.2.0",
-    "purescript-node-process": "~0.4.1",
-    "purescript-node-streams": "~0.3.0",
+    "purescript-node-process": "~0.5.0",
+    "purescript-node-streams": "~0.4.0",
     "purescript-st": "~0.1.1",
     "purescript-maps": "~0.5.4",
-    "purescript-node-child-process": "~0.5.0",
+    "purescript-node-child-process": "~0.6.0",
     "purescript-datetime": "~0.9.1"
   }
 }
