@@ -42,36 +42,6 @@ import Psa.Printer.Default as DefaultPrinter
 
 foreign import version :: String
 
-usage :: String
-usage = """psa - Error/Warning reporting frontend for psc 
-
-Usage: psa [--censor-lib] [--censor-src]
-           [--censor-codes=CODES] [--filter-codes=CODES]
-           [--no-colors] [--no-source]
-           [--is-lib=DIR] [--psc=PSC] [--stash]
-           PSC_OPTIONS
-
-Available options:
-  -v,--version           Show the version number
-  -h,--help              Show this help text
-  --verbose-stats        Show counts for each warning type
-  --censor-warnings      Censor all warnings
-  --censor-lib           Censor warnings from library sources
-  --censor-src           Censor warnings from project sources
-  --censor-codes=CODES   Censor specific error codes
-  --filter-codes=CODES   Only show specific error codes
-  --no-colors            Disable ANSI colors
-  --no-source            Disable original source code printing
-  --strict               Promotes src warnings to errors
-  --stash                Enable persistent warnings (defaults to .psa-stash)
-  --stash=FILE           Enable persistent warnings using a specific stash file
-  --is-lib=DIR           Distinguishing library path (defaults to 'bower_components')
-  --psc=PSC              Name of psc executable (defaults to 'psc')
-
-  CODES                  Comma-separated list of psc error codes
-  PSC_OPTIONS            Any extra options are passed to psc
-"""
-
 defaultOptions :: PsaOptions
 defaultOptions =
   { ansi: true
@@ -309,6 +279,36 @@ main = void do
                   STMap.poke fileStat f s
                   pure s
     pure $ old' <> new
+
+usage :: String
+usage = """psa - Error/Warning reporting frontend for psc
+
+Usage: psa [--censor-lib] [--censor-src]
+           [--censor-codes=CODES] [--filter-codes=CODES]
+           [--no-colors] [--no-source]
+           [--is-lib=DIR] [--psc=PSC] [--stash]
+           PSC_OPTIONS
+
+Available options:
+  -v,--version           Show the version number
+  -h,--help              Show this help text
+  --verbose-stats        Show counts for each warning type
+  --censor-warnings      Censor all warnings
+  --censor-lib           Censor warnings from library sources
+  --censor-src           Censor warnings from project sources
+  --censor-codes=CODES   Censor specific error codes
+  --filter-codes=CODES   Only show specific error codes
+  --no-colors            Disable ANSI colors
+  --no-source            Disable original source code printing
+  --strict               Promotes src warnings to errors
+  --stash                Enable persistent warnings (defaults to .psa-stash)
+  --stash=FILE           Enable persistent warnings using a specific stash file
+  --is-lib=DIR           Distinguishing library path (defaults to 'bower_components')
+  --psc=PSC              Name of psc executable (defaults to 'psc')
+
+  CODES                  Comma-separated list of psc error codes
+  PSC_OPTIONS            Any extra options are passed to psc
+"""
 
 -- Due to `catchException` label annoyingness
 catchException'
