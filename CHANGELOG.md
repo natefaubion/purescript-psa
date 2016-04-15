@@ -1,3 +1,8 @@
+### v0.3.6 (2016-4-15)
+
+* Fix edge-case position trimming
+* Bump dependencies
+
 ### v0.3.5 (2016-3-5)
 
 * Retry with `.cmd` on Windows
