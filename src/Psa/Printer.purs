@@ -13,7 +13,7 @@ module Psa.Printer
   , renderSource
   ) where
 
-import Prelude (class Semigroup, (-), (<>), (>), ($), show, (+), (<$>))
+import Prelude
 import Ansi.Output (foreground, dim)
 import Ansi.Codes as Ansi
 import Data.Monoid (class Monoid)

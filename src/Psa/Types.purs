@@ -8,19 +8,16 @@ module Psa.Types
   , PsaAnnotedError
   , PsaPath(..)
   , Position
+  , Suggestion
   , Lines
   , parsePsaResult
   , parsePsaError
+  , encodePsaResult
   , encodePsaError
   , compareByLocation
   ) where
 
 import Prelude
-  ( map, pure, bind, eq, compare
-  , (<*>), (<$>), ($), (>>=)
-  , class Eq, class Ord
-  , Ordering(..)
-  )
 import Data.Argonaut.Core (Json, JObject, jsonNull)
 import Data.Argonaut.Combinators ((.?))
 import Data.Argonaut.Encode (encodeJson)
@@ -85,6 +82,8 @@ type PsaResult =
 type PsaError =
   { moduleName :: Maybe ModuleName
   , errorCode :: ErrorCode
+  , errorLink :: String
+  , suggestion :: Maybe Suggestion
   , message :: String
   , filename :: Maybe Filename
   , position :: Maybe Position
@@ -102,6 +101,10 @@ type Position =
   , startColumn :: Int
   , endLine :: Int
   , endColumn :: Int
+  }
+
+type Suggestion =
+  { replacement :: String
   }
 
 compareByLocation :: PsaAnnotedError -> PsaAnnotedError -> Ordering
@@ -128,14 +131,18 @@ parsePsaError :: JObject -> Either String PsaError
 parsePsaError obj =
   { moduleName: _
   , errorCode: _
+  , errorLink: _
   , message: _
   , filename: _
   , position: _
+  , suggestion: _
   } <$> obj .? "moduleName"
     <*> obj .? "errorCode"
+    <*> obj .? "errorLink"
     <*> obj .? "message"
     <*> obj .? "filename"
     <*> (obj .? "position" >>= parsePosition)
+    <*> (obj .? "suggestion" >>= parseSuggestion)
 
 parsePosition :: Maybe JObject -> Either String (Maybe Position)
 parsePosition =
@@ -149,14 +156,30 @@ parsePosition =
       <*> obj .? "endLine"
       <*> obj .? "endColumn"
 
+parseSuggestion :: Maybe JObject -> Either String (Maybe Suggestion)
+parseSuggestion =
+  maybe (pure Nothing) \obj -> map Just $
+    { replacement: _ } <$> obj .? "replacement"
+
+encodePsaResult :: PsaResult -> Json
+encodePsaResult res = encodeJson $ runPure $ StrMap.runST do
+  obj <- STMap.new
+  STMap.poke obj "warnings" $ encodeJson (encodePsaError <$> res.warnings)
+  STMap.poke obj "errors"   $ encodeJson (encodePsaError <$> res.errors)
+
 encodePsaError :: PsaError -> Json
 encodePsaError error = encodeJson $ runPure $ StrMap.runST do
   obj <- STMap.new
   STMap.poke obj "moduleName"  $ encodeJson error.moduleName
   STMap.poke obj "errorCode"   $ encodeJson error.errorCode
+  STMap.poke obj "errorLink"   $ encodeJson error.errorLink
   STMap.poke obj "message"     $ encodeJson error.message
   STMap.poke obj "filename"    $ encodeJson error.filename
   STMap.poke obj "position"    $ encodeJson (maybe jsonNull encodePosition error.position)
+  STMap.poke obj "suggestion"  $ encodeJson (maybe jsonNull encodeSuggestion error.suggestion)
 
 encodePosition :: Position -> Json
 encodePosition = unsafeCoerce
+
+encodeSuggestion :: Suggestion -> Json
+encodeSuggestion = unsafeCoerce

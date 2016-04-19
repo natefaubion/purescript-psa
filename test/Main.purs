@@ -1,5 +1,6 @@
 module Test.Main where
 
+import Prelude (show, append)
 import Test.Foo
 
 main =
@@ -14,4 +15,4 @@ main =
                   42))))))))
   
 
-bar = 12
+bar = show 12

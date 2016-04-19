@@ -1,6 +1,6 @@
 module Psa.Util where
 
-import Prelude (class Applicative, Unit, unit, pure, (+), (-), (<>), (<=), ($), otherwise)
+import Prelude
 import Data.Foldable (class Foldable, foldl)
 import Data.Monoid (class Monoid, mempty)
 import Data.String as Str

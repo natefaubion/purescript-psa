@@ -2,9 +2,11 @@ module Psa.Output
   ( output
   , Output
   , OutputStats
+  , trimPosition
+  , trimMessage
   ) where
 
-import Prelude (class Monad, bind, otherwise, not, pure, top, id, (||), (&&), ($), (+), (-), (<), (<=), (==), (<*>), (<$>), (<>), (<<<), (>>>))
+import Prelude
 import Data.Foldable (foldl, any)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Tuple (Tuple(..), fst)
@@ -81,7 +83,6 @@ output loadLines options result = do
       errors = pathOf <$> result.errors
 
   pathOf :: PsaError -> Tuple PsaPath PsaError
-  -- pathOf x = Tuple (maybe Unknown (errorPath options.libDirs <<< Path.relative options.cwd) x.filename) x
   pathOf x =
     case x.filename of
       Just f  -> Tuple (errorPath options.libDirs f (Path.relative options.cwd f)) x
@@ -147,7 +148,7 @@ shouldShowError { filterCodes, censorCodes, censorSrc, censorLib, censorWarnings
 
 errorPath :: Array String -> String -> String -> PsaPath
 errorPath libDirs path short =
-  if any (path `startsWith`) libDirs
+  if any (path `startsWith` _) libDirs
     then Lib short
     else Src short
   where
@@ -250,7 +251,7 @@ trimMessage =
   dedent { lines, indent } l
     | l == ""   = { lines: Array.snoc lines l, indent }
     | otherwise =
-      let indent' = Str.length $ Str.takeWhile (== ' ') l in
+      let indent' = Str.length $ Str.takeWhile (_ == ' ') l in
       if indent' < indent
         then { lines: Array.snoc lines (Str.drop indent' l), indent: indent' }
         else { lines: Array.snoc lines (Str.drop indent l), indent }

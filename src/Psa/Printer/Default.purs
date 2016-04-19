@@ -6,7 +6,7 @@ module Psa.Printer.Default
   , print
   ) where
 
-import Prelude (Unit, ($), (+), (-), (<>), show, (==), (<<<), map, (<*>), (<$>), bind)
+import Prelude
 import Data.Array as Array
 import Data.Foldable (sum, maximum)
 import Data.Maybe (fromMaybe)

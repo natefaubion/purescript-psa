@@ -14,8 +14,8 @@
   },
   "scripts": {
     "setup": "bower link && cd bin && bower link purescript-psa && bower install",
-    "compile": "psa -r \"../\" -c -f \"bin/src/**/*.js\" -f \"bin/bower_components/purescript-*/src/**/*.js\" \"bin/src/**/*.purs\" \"bin/bower_components/purescript-*/src/**/*.purs\"",
-    "compile-self": "node index.js -r \"../\" -c -f \"bin/src/**/*.js\" -f \"bin/bower_components/purescript-*/src/**/*.js\" \"bin/src/**/*.purs\" \"bin/bower_components/purescript-*/src/**/*.purs\"",
+    "compile": "psa --is-lib=bin/bower_components -c -f \"bin/src/**/*.js\" -f \"bin/bower_components/purescript-*/src/**/*.js\" \"bin/src/**/*.purs\" \"bin/bower_components/purescript-*/src/**/*.purs\"",
+    "compile-self": "node index.js -c -f \"bin/src/**/*.js\" -f \"bin/bower_components/purescript-*/src/**/*.js\" \"bin/src/**/*.purs\" \"bin/bower_components/purescript-*/src/**/*.purs\"",
     "pretest": "rm -rf test/output",
     "test": "node index.js --is-lib=test/bower_components -o \"test/output\" -f \"test/*.js\" -f \"test/bower_components/purescript-*/src/**/*.js\" \"test/*.purs\" \"test/bower_components/purescript-*/src/**/*.purs\"",
     "pretest-psc": "rm -rf test/output",

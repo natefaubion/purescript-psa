@@ -19,7 +19,7 @@ import Data.String as Str
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Console as Console
-import Control.Monad.Eff.Exception (EXCEPTION, Error, catchException, throw, throwException, message)
+import Control.Monad.Eff.Exception (EXCEPTION, Error, catchException, throw, throwException)
 import Control.Monad.ST (ST)
 import Control.Monad.ST as ST
 import Control.Apply ((*>))
@@ -39,6 +39,7 @@ import Node.Path as Path
 import Unsafe.Coerce (unsafeCoerce)
 import Psa (PsaOptions, parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
+import Psa.Printer.Json as JsonPrinter
 
 foreign import version :: String
 
@@ -174,7 +175,7 @@ main = void do
   , jsonErrors
   } <- parseOptions (defaultOptions { cwd = cwd }) argv
 
-  let opts' = opts { libDirs = (<> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
+  let opts' = opts { libDirs = (_ <> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
       args  = Array.cons "--json-errors" extra
 
   stashData <-
@@ -195,7 +196,7 @@ main = void do
           when stash $ writeStashFile stashFile merged
           out' <- output loadLinesImpl opts' out { warnings = merged }
           if jsonErrors
-            then Console.error err -- Just proxy psc's errors for tooling
+            then JsonPrinter.print out'
             else DefaultPrinter.print opts' out'
           if StrMap.isEmpty out'.stats.allErrors
             then Process.exit 0
@@ -210,7 +211,7 @@ main = void do
     child <- Child.spawn cmd args Child.defaultSpawnOptions { stdio = stdio }
     buffer <- ST.newSTRef ""
     Stream.onDataString (Child.stderr child) Encoding.UTF8 \chunk ->
-      void $ ST.modifySTRef buffer (<> chunk)
+      void $ ST.modifySTRef buffer (_ <> chunk)
     Child.onExit child \status ->
       case status of
         Child.Normally n -> do
@@ -275,7 +276,7 @@ main = void do
                 Just s -> pure s
                 Nothing -> do
                   s <- catchException' (\_ -> pure false) $
-                    (date >) <<< Stats.modifiedTime <$> File.stat f
+                    (date > _) <<< Stats.modifiedTime <$> File.stat f
                   STMap.poke fileStat f s
                   pure s
     pure $ old' <> new
