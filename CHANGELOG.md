@@ -1,3 +1,7 @@
+### v0.3.7 (2016-4-18)
+
+* Apply filters and stash to `--json-errors`
+
 ### v0.3.6 (2016-4-15)
 
 * Fix edge-case position trimming
