@@ -140,8 +140,9 @@ updateStats tag path code printed s =
   alterStat (Just x) = Just (bump x)
 
 shouldShowError :: PsaOptions -> ErrorTag -> PsaPath -> String -> Boolean
-shouldShowError { filterCodes, censorCodes, censorSrc, censorLib, censorWarnings } tag path code =
-  not (censorWarnings && isWarning tag)
+shouldShowError _ Error _ _ = true
+shouldShowError { filterCodes, censorCodes, censorSrc, censorLib, censorWarnings } _ path code =
+  not censorWarnings
   && not (censorSrc && isSrc path || censorLib && isLib path)
   && (Set.isEmpty filterCodes || Set.member code filterCodes)
   && (Set.isEmpty censorCodes || not (Set.member code censorCodes))
