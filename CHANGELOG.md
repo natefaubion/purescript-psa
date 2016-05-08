@@ -1,3 +1,7 @@
+### v0.3.8 (2016-5-8)
+
+* Always show errors, regardless of filter/censor configuration
+
 ### v0.3.7 (2016-4-18)
 
 * Apply filters and stash to `--json-errors`
