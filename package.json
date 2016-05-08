@@ -14,6 +14,7 @@
   },
   "scripts": {
     "setup": "bower link && cd bin && bower link purescript-psa && bower install",
+    "build": "npm run compile",
     "compile": "psa --is-lib=bin/bower_components -c -f \"bin/src/**/*.js\" -f \"bin/bower_components/purescript-*/src/**/*.js\" \"bin/src/**/*.purs\" \"bin/bower_components/purescript-*/src/**/*.purs\"",
     "compile-self": "node index.js -c -f \"bin/src/**/*.js\" -f \"bin/bower_components/purescript-*/src/**/*.js\" \"bin/src/**/*.purs\" \"bin/bower_components/purescript-*/src/**/*.purs\"",
     "pretest": "rm -rf test/output",

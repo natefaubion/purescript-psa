@@ -94,6 +94,7 @@ type PsaAnnotedError =
   , path :: PsaPath
   , source :: Maybe Lines
   , position :: Maybe Position
+  , message :: String
   }
 
 type Position =

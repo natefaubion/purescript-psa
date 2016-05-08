@@ -20,7 +20,7 @@ import Ansi.Output (foreground, dim)
 import Ansi.Codes as Ansi
 import Psa.Types (Lines, Position, PsaAnnotedError, PsaOptions, PsaPath(..))
 import Psa.Output (OutputStats, Output)
-import Psa.Printer (Rendered, AnsiText, ansiLength, renderSource, plain, style, indent, line, para, renderAnsi, renderRow)
+import Psa.Printer (Rendered, AnsiText, ansiLength, renderSource, plain, style, indent, line, para, render)
 import Psa.Util (replicate, iter_)
 
 -- | Prints output to the console.
@@ -37,19 +37,19 @@ print options output = do
   Console.error $ toString (renderStats' output.stats)
 
   where
+  toString = render options.ansi
   lenWarnings = Array.length output.warnings
   lenErrors = Array.length output.errors
-  toString = renderRow (Str.joinWith "" <<< map (renderAnsi options.ansi))
   renderStats' = if options.verboseStats then renderVerboseStats else renderStats
 
 renderWarning :: Int -> Int -> PsaAnnotedError -> Rendered
-renderWarning = render (foreground Ansi.Yellow)
+renderWarning = renderWrapper (foreground Ansi.Yellow)
 
 renderError :: Int -> Int -> PsaAnnotedError -> Rendered
-renderError = render (foreground Ansi.Red)
+renderError = renderWrapper (foreground Ansi.Red)
 
-render :: Array Ansi.GraphicsParam -> Int -> Int -> PsaAnnotedError -> Rendered
-render gfx total index { error, path, position, source } =
+renderWrapper :: Array Ansi.GraphicsParam -> Int -> Int -> PsaAnnotedError -> Rendered
+renderWrapper gfx total index { error, path, position, source, message } =
   para
     [ line $
         [ renderStatus gfx total index error.errorCode
@@ -59,7 +59,7 @@ render gfx total index { error, path, position, source } =
     , emptyLine
     , indented
          $ fromMaybe mempty (renderSource' <$> position <*> source)
-        <> toLines error.message
+        <> toLines message
     ]
 
 toLines :: String -> Rendered

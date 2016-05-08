@@ -2,6 +2,7 @@ module Psa.Output
   ( output
   , Output
   , OutputStats
+  , annotatedError
   , trimPosition
   , trimMessage
   ) where
@@ -93,9 +94,7 @@ output loadLines options result = do
     if shouldShowError options tag path error.errorCode
       then do
         source <- fromMaybe (pure Nothing) (loadLines <$> error.filename <*> error.position)
-        let position = trimPosition <$> source <*> error.position
-            source' = (\p -> Array.take (p.endLine - p.startLine + 1)) <$> position <*> source
-        update [{ error: error { message = trimMessage error.message }, path, position, source: source' }]
+        update [annotatedError path source error]
       else
         update []
 
@@ -108,6 +107,13 @@ output loadLines options result = do
         tag state
       where
       stats = updateStats tag path error.errorCode (not (Array.null log)) state.stats
+
+annotatedError :: PsaPath -> Maybe Lines -> PsaError -> PsaAnnotedError
+annotatedError path lines error = { path, position, message, source, error }
+  where
+  position = trimPosition <$> lines <*> error.position
+  message = trimMessage error.message
+  source = (\p -> Array.take (p.endLine - p.startLine + 1)) <$> position <*> lines
 
 partition :: forall a. (a -> Boolean) -> Array a -> { pass :: Array a, fail :: Array a }
 partition f = foldl go { pass: [], fail: [] }

@@ -8,6 +8,7 @@ module Psa.Printer
   , style
   , ansiLength
   , Rendered
+  , render
   , renderRow
   , renderAnsi
   , renderSource
@@ -63,6 +64,9 @@ style = Style
 ansiLength :: AnsiText -> Int
 ansiLength (Plain a)   = Str.length a
 ansiLength (Style _ a) = Str.length a
+
+render :: Boolean -> Rendered -> String
+render ansi = renderRow (Str.joinWith "" <<< map (renderAnsi ansi))
 
 renderRow :: forall a. (a -> String) -> Row a -> String
 renderRow f = go "" where
