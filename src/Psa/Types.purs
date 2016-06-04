@@ -106,6 +106,7 @@ type Position =
 
 type Suggestion =
   { replacement :: String
+  , replaceRange :: Maybe Position
   }
 
 compareByLocation :: PsaAnnotedError -> PsaAnnotedError -> Ordering
@@ -160,7 +161,10 @@ parsePosition =
 parseSuggestion :: Maybe JObject -> Either String (Maybe Suggestion)
 parseSuggestion =
   maybe (pure Nothing) \obj -> map Just $
-    { replacement: _ } <$> obj .? "replacement"
+    { replacement: _
+    , replaceRange: _
+    } <$> obj .? "replacement"
+      <*> (obj .? "replaceRange" >>= parsePosition)
 
 encodePsaResult :: PsaResult -> Json
 encodePsaResult res = encodeJson $ runPure $ StrMap.runST do
@@ -183,4 +187,7 @@ encodePosition :: Position -> Json
 encodePosition = unsafeCoerce
 
 encodeSuggestion :: Suggestion -> Json
-encodeSuggestion = unsafeCoerce
+encodeSuggestion suggestion = encodeJson $ runPure $ StrMap.runST do
+  obj <- STMap.new
+  STMap.poke obj "replacement"  $ encodeJson suggestion.replacement
+  STMap.poke obj "replaceRange" $ encodeJson (maybe jsonNull encodePosition suggestion.replaceRange)
