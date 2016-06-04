@@ -1,3 +1,7 @@
+### v0.3.9 (2016-6-4)
+
+* Support for 0.9.x suggestions
+
 ### v0.3.8 (2016-5-8)
 
 * Always show errors, regardless of filter/censor configuration

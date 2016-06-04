@@ -4,7 +4,6 @@
   "authors": [
     "Nathan Faubion"
   ],
-  "version": "0.3.8",
   "license": "MIT",
   "ignore": [
     "**/.*",
