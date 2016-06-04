@@ -20,10 +20,11 @@ module Psa.Types
 import Prelude
 import Data.Argonaut.Core (Json, JObject, jsonNull)
 import Data.Argonaut.Combinators ((.?))
+import Data.Argonaut.Decode (decodeJson, class DecodeJson)
 import Data.Argonaut.Encode (encodeJson)
 import Data.StrMap as StrMap
 import Data.StrMap.ST as STMap
-import Data.Either (Either)
+import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), maybe)
 import Data.Set (Set)
 import Data.Traversable (traverse)
@@ -164,7 +165,7 @@ parseSuggestion =
     { replacement: _
     , replaceRange: _
     } <$> obj .? "replacement"
-      <*> (obj .? "replaceRange" >>= parsePosition)
+      <*> (obj .?? "replaceRange" >>= parsePosition)
 
 encodePsaResult :: PsaResult -> Json
 encodePsaResult res = encodeJson $ runPure $ StrMap.runST do
@@ -191,3 +192,8 @@ encodeSuggestion suggestion = encodeJson $ runPure $ StrMap.runST do
   obj <- STMap.new
   STMap.poke obj "replacement"  $ encodeJson suggestion.replacement
   STMap.poke obj "replaceRange" $ encodeJson (maybe jsonNull encodePosition suggestion.replaceRange)
+
+maybeProp :: forall a. (DecodeJson a) => JObject -> String -> Either String (Maybe a)
+maybeProp obj key = maybe (Right Nothing) decodeJson (StrMap.lookup key obj)
+
+infix 7 maybeProp as .??
