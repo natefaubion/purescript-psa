@@ -6,8 +6,8 @@ import Data.Argonaut.Parser (jsonParser)
 import Data.Argonaut.Decode (decodeJson)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Array as Array
-import Data.Array.Unsafe (unsafeIndex)
-import Data.Date as Date
+import Data.Array.Partial (unsafeIndex)
+import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..))
 import Data.Foldable (foldr, for_)
 import Data.Traversable (traverse)
@@ -20,10 +20,10 @@ import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Console as Console
 import Control.Monad.Eff.Exception (EXCEPTION, Error, catchException, throw, throwException)
+import Control.Monad.Eff.Now (NOW, now)
 import Control.Monad.ST (ST)
 import Control.Monad.ST as ST
 import Control.Apply ((*>))
-import Control.Monad (when)
 import Node.Platform (Platform(Win32))
 import Node.Process (PROCESS)
 import Node.Process as Process
@@ -37,6 +37,7 @@ import Node.FS.Sync as File
 import Node.FS.Stats as Stats
 import Node.Path as Path
 import Unsafe.Coerce (unsafeCoerce)
+import Partial.Unsafe (unsafePartial)
 import Psa (PsaOptions, parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 import Psa.Printer.Json as JsonPrinter
@@ -157,7 +158,7 @@ type MainEff h eff =
   , fs :: FS
   , cp :: CHILD_PROCESS
   , st :: ST h
-  , now :: Date.Now
+  , now :: NOW
   | eff
   )
 
@@ -204,7 +205,7 @@ main = void do
 
   where
   insertFilenames = foldr \x s -> maybe s (flip Set.insert s) x.filename
-  stdio = [ Just Child.Pipe, unsafeIndex Child.inherit 1, Just Child.Pipe ]
+  stdio = [ Just Child.Pipe, unsafePartial (unsafeIndex Child.inherit 1), Just Child.Pipe ]
   loadNothing _ _ = pure Nothing
 
   spawn' cmd args onExit = do
@@ -249,7 +250,7 @@ main = void do
 
   decodeStash s = jsonParser s >>= decodeJson >>= traverse parsePsaError
   encodeStash s = encodeJson (encodePsaError <$> s)
-  emptyStash    = { date: _ , stash: [] } <$> Date.now
+  emptyStash    = { date: _ , stash: [] } <$> toDateTime <$> now
 
   readStashFile stashFile = catchException' (const emptyStash) do
     stat <- File.stat stashFile

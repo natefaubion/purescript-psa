@@ -19,8 +19,8 @@ module Psa.Types
 
 import Prelude
 import Data.Argonaut.Core (Json, JObject, jsonNull)
-import Data.Argonaut.Combinators ((.?))
 import Data.Argonaut.Decode (decodeJson, class DecodeJson)
+import Data.Argonaut.Decode.Combinators ((.?))
 import Data.Argonaut.Encode (encodeJson)
 import Data.StrMap as StrMap
 import Data.StrMap.ST as STMap
