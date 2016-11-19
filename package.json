@@ -1,6 +1,6 @@
 {
   "name": "purescript-psa",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "description": "Error/Warning reporting frontend for psc",
   "keywords": ["purescript", "psc"],
   "author": "Nathan Faubion <nathan@n-son.com> (https://github.com/natefaubion/)",

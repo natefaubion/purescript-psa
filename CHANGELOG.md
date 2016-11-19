@@ -1,3 +1,7 @@
+### v0.4.0 (2016-11-19)
+
+* Filtering/censoring warnings is applied before --strict
+
 ### v0.3.9 (2016-6-4)
 
 * Support for 0.9.x suggestions
