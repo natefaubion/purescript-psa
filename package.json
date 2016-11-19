@@ -13,10 +13,9 @@
     "test": "test"
   },
   "scripts": {
-    "setup": "bower link && cd bin && bower link purescript-psa && bower install",
     "build": "npm run compile",
-    "compile": "psa --is-lib=bin/bower_components -c \"bin/src/**/*.purs\" \"bin/bower_components/purescript-*/src/**/*.purs\"",
-    "compile-self": "node index.js -c \"bin/src/**/*.purs\" \"bin/bower_components/purescript-*/src/**/*.purs\"",
+    "compile": "psa -c \"src/**/*.purs\" \"bower_components/purescript-*/src/**/*.purs\"",
+    "compile-self": "node index.js -c \"src/**/*.purs\" \"bower_components/purescript-*/src/**/*.purs\"",
     "pretest": "rm -rf test/output",
     "test": "node index.js --is-lib=test/bower_components -o \"test/output\" \"test/*.purs\" \"test/bower_components/purescript-*/src/**/*.purs\"",
     "pretest-psc": "rm -rf test/output",

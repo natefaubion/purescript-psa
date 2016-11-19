@@ -1,10 +1,9 @@
 {
-  "name": "purescript-psa",
-  "description": "Error/Warning reporting frontend for psc",
-  "authors": [
-    "Nathan Faubion"
+  "name": "bin",
+  "version": "0.0.0",
+  "moduleType": [
+    "node"
   ],
-  "license": "MIT",
   "ignore": [
     "**/.*",
     "node_modules",
@@ -12,21 +11,16 @@
     "output"
   ],
   "dependencies": {
-    "purescript-prelude": "~1.0.1",
-    "purescript-eff": "~1.0.0",
-    "purescript-argonaut-core": "~1.0.0",
-    "purescript-argonaut-codecs": "~1.0.0",
-    "purescript-maybe": "~1.0.0",
-    "purescript-monoid": "~1.0.0",
-    "purescript-tuples": "~1.0.0",
-    "purescript-arrays": "~1.0.0",
-    "purescript-strings": "~1.0.0",
-    "purescript-sets": "~1.0.0",
-    "purescript-foldable-traversable": "~1.0.0",
-    "purescript-either": "~1.0.0",
-    "purescript-ansi": "~1.0.0",
-    "purescript-node-path": "~1.0.0",
-    "purescript-control": "~1.0.0",
-    "purescript-console": "~1.0.0"
+    "purescript-console": "^2.0.0",
+    "purescript-node-fs": "^3.0.0",
+    "purescript-node-buffer": "^2.0.0",
+    "purescript-node-child-process": "^3.0.0",
+    "purescript-node-process": "^3.0.0",
+    "purescript-node-streams": "^2.0.0",
+    "purescript-st": "^2.0.0",
+    "purescript-maps": "^2.0.0",
+    "purescript-now": "^2.0.0",
+    "purescript-datetime": "^2.0.0",
+    "purescript-psa-utils": "^2.0.0"
   }
 }

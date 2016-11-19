@@ -6,7 +6,6 @@ import Data.Argonaut.Parser (jsonParser)
 import Data.Argonaut.Decode (decodeJson)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Array as Array
-import Data.Array.Partial (unsafeIndex)
 import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..))
 import Data.Foldable (foldr, for_)
@@ -23,7 +22,6 @@ import Control.Monad.Eff.Exception (EXCEPTION, Error, catchException, throw, thr
 import Control.Monad.Eff.Now (NOW, now)
 import Control.Monad.ST (ST)
 import Control.Monad.ST as ST
-import Control.Apply ((*>))
 import Node.Platform (Platform(Win32))
 import Node.Process (PROCESS)
 import Node.Process as Process
@@ -124,10 +122,10 @@ parseOptions opts args =
       pure p { opts = p.opts { censorSrc = true } }
 
     | isPrefix "--censor-codes=" arg =
-      pure p { opts = p.opts { censorCodes = foldr Set.insert p.opts.censorCodes (Str.split "," (Str.drop 15 arg)) } }
+      pure p { opts = p.opts { censorCodes = foldr Set.insert p.opts.censorCodes (Str.split (Str.Pattern ",") (Str.drop 15 arg)) } }
 
     | isPrefix "--filter-codes=" arg =
-      pure p { opts = p.opts { filterCodes = foldr Set.insert p.opts.filterCodes (Str.split "," (Str.drop 15 arg)) } }
+      pure p { opts = p.opts { filterCodes = foldr Set.insert p.opts.filterCodes (Str.split (Str.Pattern ",") (Str.drop 15 arg)) } }
 
     | isPrefix "--is-lib=" arg =
       pure p { opts = p.opts { libDirs = Array.snoc p.opts.libDirs (Str.drop 9 arg) } }
@@ -141,7 +139,7 @@ parseOptions opts args =
     | otherwise = pure p { extra = Array.snoc p.extra arg }
 
   isPrefix s str =
-    case Str.indexOf s str of
+    case Str.indexOf (Str.Pattern s) str of
       Just x | x == 0 -> true
       _               -> false
 
@@ -185,7 +183,7 @@ main = void do
       else emptyStash
 
   spawn' psc args \buffer -> do
-    let stderr = Str.split "\n" buffer
+    let stderr = Str.split (Str.Pattern "\n") buffer
     for_ stderr \err ->
       case jsonParser err >>= decodeJson >>= parsePsaResult of
         Left _ -> Console.error err
@@ -205,7 +203,7 @@ main = void do
 
   where
   insertFilenames = foldr \x s -> maybe s (flip Set.insert s) x.filename
-  stdio = [ Just Child.Pipe, unsafePartial (unsafeIndex Child.inherit 1), Just Child.Pipe ]
+  stdio = [ Just Child.Pipe, unsafePartial (Array.unsafeIndex Child.inherit 1), Just Child.Pipe ]
   loadNothing _ _ = pure Nothing
 
   spawn' cmd args onExit = do
@@ -228,7 +226,7 @@ main = void do
      -- On windows, if the executable wasn't found, try adding .cmd
      if Process.platform == Win32
        then
-         case Str.stripSuffix ".cmd" cmd of
+         case Str.stripSuffix (Str.Pattern ".cmd") cmd of
            Nothing      -> spawn' (cmd <> ".cmd") args onExit
            Just bareCmd -> throw $ "`" <> bareCmd <> "` executable not found. (nor `" <> cmd <> "`)"
        else
@@ -242,7 +240,7 @@ main = void do
       case cache of
         Just lines -> pure lines
         Nothing -> do
-          lines <- Str.split "\n" <$> File.readTextFile Encoding.UTF8 filename
+          lines <- Str.split (Str.Pattern "\n") <$> File.readTextFile Encoding.UTF8 filename
           STMap.poke files filename lines
           pure lines
     let source = Array.slice (pos.startLine - 1) (pos.endLine) contents
