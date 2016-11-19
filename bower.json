@@ -21,6 +21,6 @@
     "purescript-maps": "^2.0.0",
     "purescript-now": "^2.0.0",
     "purescript-datetime": "^2.0.0",
-    "purescript-psa-utils": "^2.0.0"
+    "purescript-psa-utils": "^2.1.0"
   }
 }
