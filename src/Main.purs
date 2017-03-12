@@ -59,7 +59,7 @@ defaultOptions =
 type ParseOptions =
   { extra :: Array String
   , opts :: PsaOptions
-  , psc :: String
+  , purs :: String
   , showSource :: Boolean
   , stash :: Boolean
   , stashFile :: String
@@ -75,7 +75,7 @@ parseOptions opts args =
   defaultLibDir <$>
     Array.foldM parse
       { extra: []
-      , psc: "psc"
+      , purs: "purs"
       , showSource: true
       , stash: false
       , stashFile: ".psa-stash"
@@ -130,8 +130,8 @@ parseOptions opts args =
     | isPrefix "--is-lib=" arg =
       pure p { opts = p.opts { libDirs = Array.snoc p.opts.libDirs (Str.drop 9 arg) } }
 
-    | isPrefix "--psc=" arg =
-      pure p { psc = Str.drop 6 arg }
+    | isPrefix "--purs=" arg =
+      pure p { purs = Str.drop 6 arg }
 
     | isPrefix "--stash=" arg =
       pure p { stash = true, stashFile = Str.drop 8 arg }
@@ -167,7 +167,7 @@ main = void do
 
   { extra
   , opts
-  , psc
+  , purs
   , showSource
   , stash
   , stashFile
@@ -175,14 +175,14 @@ main = void do
   } <- parseOptions (defaultOptions { cwd = cwd }) argv
 
   let opts' = opts { libDirs = (_ <> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
-      args  = Array.cons "--json-errors" extra
+      args  = Array.cons "compile" $ Array.cons "--json-errors" extra
 
   stashData <-
     if stash
       then readStashFile stashFile
       else emptyStash
 
-  spawn' psc args \buffer -> do
+  spawn' purs args \buffer -> do
     let stderr = Str.split (Str.Pattern "\n") buffer
     for_ stderr \err ->
       case jsonParser err >>= decodeJson >>= parsePsaResult of
@@ -281,12 +281,12 @@ main = void do
     pure $ old' <> new
 
 usage :: String
-usage = """psa - Error/Warning reporting frontend for psc
+usage = """psa - Error/Warning reporting frontend for 'purs compile'
 
 Usage: psa [--censor-lib] [--censor-src]
            [--censor-codes=CODES] [--filter-codes=CODES]
            [--no-colors] [--no-source]
-           [--is-lib=DIR] [--psc=PSC] [--stash]
+           [--is-lib=DIR] [--purs=PURS] [--stash]
            PSC_OPTIONS
 
 Available options:
@@ -304,10 +304,10 @@ Available options:
   --stash                Enable persistent warnings (defaults to .psa-stash)
   --stash=FILE           Enable persistent warnings using a specific stash file
   --is-lib=DIR           Distinguishing library path (defaults to 'bower_components')
-  --psc=PSC              Name of psc executable (defaults to 'psc')
+  --purs=PURS            Name of purs executable (defaults to 'purs')
 
-  CODES                  Comma-separated list of psc error codes
-  PSC_OPTIONS            Any extra options are passed to psc
+  CODES                  Comma-separated list of purs error codes
+  PSC_OPTIONS            Any extra options are passed to 'purs compile'
 """
 
 -- Due to `catchException` label annoyingness
