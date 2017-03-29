@@ -1,3 +1,7 @@
+### v0.5.0 (2017-03-28)
+
+* Updated to call `purs build`.
+
 ### v0.4.0 (2016-11-19)
 
 * Filtering/censoring warnings is applied before --strict
