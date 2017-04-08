@@ -1,3 +1,7 @@
+### v0.5.1 (2017-04-08)
+
+* Fix parsing of `--purs` options (@bfly2000)
+
 ### v0.5.0 (2017-03-28)
 
 * Updated to call `purs build`.
