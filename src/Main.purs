@@ -131,7 +131,7 @@ parseOptions opts args =
       pure p { opts = p.opts { libDirs = Array.snoc p.opts.libDirs (Str.drop 9 arg) } }
 
     | isPrefix "--purs=" arg =
-      pure p { purs = Str.drop 6 arg }
+      pure p { purs = Str.drop 7 arg }
 
     | isPrefix "--stash=" arg =
       pure p { stash = true, stashFile = Str.drop 8 arg }
