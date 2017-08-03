@@ -1,11 +1,12 @@
 module Main where
 
 import Prelude
-import Data.Argonaut.Printer (printJson)
+import Data.Argonaut.Core (stringify)
 import Data.Argonaut.Parser (jsonParser)
 import Data.Argonaut.Decode (decodeJson)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Array as Array
+import Data.DateTime (DateTime)
 import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..))
 import Data.Foldable (foldr, for_)
@@ -18,7 +19,7 @@ import Data.String as Str
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE)
 import Control.Monad.Eff.Console as Console
-import Control.Monad.Eff.Exception (EXCEPTION, Error, catchException, throw, throwException)
+import Control.Monad.Eff.Exception (EXCEPTION, catchException, throw, throwException)
 import Control.Monad.Eff.Now (NOW, now)
 import Control.Monad.ST (ST)
 import Control.Monad.ST as ST
@@ -34,7 +35,6 @@ import Node.FS (FS)
 import Node.FS.Sync as File
 import Node.FS.Stats as Stats
 import Node.Path as Path
-import Unsafe.Coerce (unsafeCoerce)
 import Partial.Unsafe (unsafePartial)
 import Psa (PsaOptions, parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
@@ -152,7 +152,7 @@ type MainEff h eff =
   ( process :: PROCESS
   , console :: CONSOLE
   , buffer :: BUFFER
-  , err :: EXCEPTION
+  , exception :: EXCEPTION
   , fs :: FS
   , cp :: CHILD_PROCESS
   , st :: ST h
@@ -241,16 +241,18 @@ main = void do
         Just lines -> pure lines
         Nothing -> do
           lines <- Str.split (Str.Pattern "\n") <$> File.readTextFile Encoding.UTF8 filename
-          STMap.poke files filename lines
+          _ <- STMap.poke files filename lines
           pure lines
     let source = Array.slice (pos.startLine - 1) (pos.endLine) contents
     pure $ Just source
 
   decodeStash s = jsonParser s >>= decodeJson >>= traverse parsePsaError
   encodeStash s = encodeJson (encodePsaError <$> s)
-  emptyStash    = { date: _ , stash: [] } <$> toDateTime <$> now
 
-  readStashFile stashFile = catchException' (const emptyStash) do
+  emptyStash :: forall a e. Eff (now :: NOW | e) { date :: DateTime, stash :: Array a }
+  emptyStash = { date: _ , stash: [] } <$> toDateTime <$> now
+
+  readStashFile stashFile = catchException (const emptyStash) do
     stat <- File.stat stashFile
     file <- File.readTextFile Encoding.UTF8 stashFile
     case decodeStash file of
@@ -258,12 +260,12 @@ main = void do
       Right stash -> pure { date: Stats.modifiedTime stat, stash }
 
   writeStashFile stashFile warnings = do
-    let file = printJson (encodeStash warnings)
+    let file = stringify (encodeStash warnings)
     File.writeTextFile Encoding.UTF8 stashFile file
 
   mergeWarnings filenames date old new = do
     fileStat <- STMap.new
-    old' <- flip Array.filterM old \x ->
+    old' <- flip Array.filterA old \x ->
       case x.filename of
         Nothing -> pure false
         Just f ->
@@ -274,9 +276,9 @@ main = void do
               case stat of
                 Just s -> pure s
                 Nothing -> do
-                  s <- catchException' (\_ -> pure false) $
+                  s <- catchException (\_ -> pure false) $
                     (date > _) <<< Stats.modifiedTime <$> File.stat f
-                  STMap.poke fileStat f s
+                  _ <- STMap.poke fileStat f s
                   pure s
     pure $ old' <> new
 
@@ -309,11 +311,3 @@ Available options:
   CODES                  Comma-separated list of purs error codes
   PSC_OPTIONS            Any extra options are passed to 'purs compile'
 """
-
--- Due to `catchException` label annoyingness
-catchException'
-  :: forall a eff
-   . (Error -> Eff (err :: EXCEPTION | eff) a)
-  -> Eff (err :: EXCEPTION | eff) a
-  -> Eff (err :: EXCEPTION | eff) a
-catchException' eb eff = unsafeCoerce (catchException (unsafeCoerce eb) (unsafeCoerce eff))
