@@ -36,7 +36,7 @@ import Node.FS.Sync as File
 import Node.FS.Stats as Stats
 import Node.Path as Path
 import Partial.Unsafe (unsafePartial)
-import Psa (PsaOptions, parsePsaResult, parsePsaError, encodePsaError, output)
+import Psa (PsaOptions, StatVerbosity(..), parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 import Psa.Printer.Json as JsonPrinter
 
@@ -50,7 +50,7 @@ defaultOptions =
   , censorSrc: false
   , censorCodes: Set.empty
   , filterCodes: Set.empty
-  , verboseStats: false
+  , statVerbosity: CompactStats
   , libDirs: []
   , strict: false
   , cwd: ""
@@ -104,7 +104,10 @@ parseOptions opts args =
       pure p { opts = p.opts { ansi = false } }
 
     | arg == "--verbose-stats" =
-      pure p { opts = p.opts { verboseStats = true } }
+      pure p { opts = p.opts { statVerbosity = VerboseStats } }
+
+    | arg == "--censor-stats" =
+      pure p { opts = p.opts { statVerbosity = NoStats } }
 
     | arg == "--strict" =
       pure p { opts = p.opts { strict = true } }
@@ -295,6 +298,7 @@ Available options:
   -v,--version           Show the version number
   -h,--help              Show this help text
   --verbose-stats        Show counts for each warning type
+  --censor-stats         Hide counts for warning types
   --censor-warnings      Censor all warnings
   --censor-lib           Censor warnings from library sources
   --censor-src           Censor warnings from project sources
