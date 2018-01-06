@@ -18,10 +18,8 @@
     "compile-self": "node index.js -c \"src/**/*.purs\" \"bower_components/purescript-*/src/**/*.purs\"",
     "pretest": "rm -rf test/output",
     "test": "node index.js --is-lib=test/bower_components -o \"test/output\" \"test/*.purs\" \"test/bower_components/purescript-*/src/**/*.purs\"",
-    "pretest-psc": "rm -rf test/output",
-    "test-psc": "psc -o \"test/output\" \"test/*.purs\" \"test/bower_components/purescript-*/src/**/*.purs\"",
-    "predocs": "rm -rf docs",
-    "docs": "psc-docs \"bin/bower_components/*/src/**/*.purs\" --docgen Psa:docs/Psa.md --docgen Psa.Printer:docs/Psa.Printer.md --docgen Psa.Printer.Default:docs/Psa.Printer.Default.md",
+    "pretest-purs": "rm -rf test/output",
+    "test-purs": "purs -o \"test/output\" \"test/*.purs\" \"test/bower_components/purescript-*/src/**/*.purs\"",
     "prepublish": "rm -rf output && npm run compile"
   },
   "devDependencies": {
