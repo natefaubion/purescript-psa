@@ -298,7 +298,7 @@ Available options:
   -v,--version           Show the version number
   -h,--help              Show this help text
   --verbose-stats        Show counts for each warning type
-  --censor-stats         Hide counts for warning types
+  --censor-stats         Censor warning/error summary
   --censor-warnings      Censor all warnings
   --censor-lib           Censor warnings from library sources
   --censor-src           Censor warnings from project sources
