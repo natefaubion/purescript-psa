@@ -1,6 +1,6 @@
 {
   "name": "test",
   "dependencies": {
-    "purescript-prelude": "~1.0.1"
+    "purescript-prelude": "^3.0.0"
   }
 }
