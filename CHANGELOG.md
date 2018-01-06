@@ -1,3 +1,7 @@
+### v0.6.0 (2018-01-06)
+
+* Added `--censor-stats` option (@Rufflewind)
+
 ### v0.5.1 (2017-04-08)
 
 * Fix parsing of `--purs` options (@bfly2000)
