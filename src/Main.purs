@@ -118,9 +118,6 @@ parseOptions opts args =
     | arg == "--censor-lib" =
       pure p { opts = p.opts { censorLib = true } }
 
-    | arg == "--censor-lib" =
-      pure p { opts = p.opts { censorLib = true } }
-
     | arg == "--censor-src" =
       pure p { opts = p.opts { censorSrc = true } }
 
