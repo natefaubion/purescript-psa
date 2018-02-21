@@ -76,5 +76,5 @@ Usage with pulp
 [Pulp](https://github.com/bodil/pulp) supports building with `psa`: it will be used by default if it is installed, and options will be passed through, eg:
 
 ```
-pulp build --stash --censor-lib <psc-options>
+pulp build -- --stash --censor-lib <psc-options>
 ```
