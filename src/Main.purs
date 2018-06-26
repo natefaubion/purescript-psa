@@ -174,7 +174,7 @@ main = void do
   , jsonErrors
   } <- parseOptions (defaultOptions { cwd = cwd }) argv
 
-  let opts' = opts { libDirs = (_ <> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
+  let opts' = opts { libDirs = Str.drop (Str.length cwd + Str.length Path.sep) <<< (_ <> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
       args  = Array.cons "compile" $ Array.cons "--json-errors" extra
 
   stashData <-
