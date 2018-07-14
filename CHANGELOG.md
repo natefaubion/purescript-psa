@@ -1,3 +1,7 @@
+### v0.7.0 (2018-07-13)
+
+* Account for changes in 0.12 for relative paths in errors
+
 ### v0.6.0 (2018-01-06)
 
 * Added `--censor-stats` option (@Rufflewind)
