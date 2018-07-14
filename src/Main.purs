@@ -1,44 +1,39 @@
 module Main where
 
 import Prelude
+
 import Data.Argonaut.Core (stringify)
-import Data.Argonaut.Parser (jsonParser)
 import Data.Argonaut.Decode (decodeJson)
 import Data.Argonaut.Encode (encodeJson)
+import Data.Argonaut.Parser (jsonParser)
 import Data.Array as Array
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..))
 import Data.Foldable (foldr, for_)
-import Data.Traversable (traverse)
-import Data.StrMap as StrMap
-import Data.StrMap.ST as STMap
 import Data.Maybe (Maybe(..), maybe)
 import Data.Set as Set
 import Data.String as Str
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Console (CONSOLE)
-import Control.Monad.Eff.Console as Console
-import Control.Monad.Eff.Exception (EXCEPTION, catchException, throw, throwException)
-import Control.Monad.Eff.Now (NOW, now)
-import Control.Monad.ST (ST)
-import Control.Monad.ST as ST
-import Node.Platform (Platform(Win32))
-import Node.Process (PROCESS)
-import Node.Process as Process
-import Node.ChildProcess (CHILD_PROCESS)
+import Data.Traversable (traverse)
+import Effect (Effect)
+import Effect.Console as Console
+import Effect.Exception (catchException, throw, throwException)
+import Effect.Now (now)
+import Effect.Ref as Ref
+import Foreign.Object as FO
 import Node.ChildProcess as Child
-import Node.Stream as Stream
-import Node.Buffer (BUFFER)
 import Node.Encoding as Encoding
-import Node.FS (FS)
-import Node.FS.Sync as File
 import Node.FS.Stats as Stats
+import Node.FS.Sync as File
 import Node.Path as Path
+import Node.Platform (Platform(Win32))
+import Node.Process as Process
+import Node.Stream as Stream
 import Partial.Unsafe (unsafePartial)
 import Psa (PsaOptions, StatVerbosity(..), parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 import Psa.Printer.Json as JsonPrinter
+import Unsafe.Coerce (unsafeCoerce)
 
 foreign import version :: String
 
@@ -67,10 +62,9 @@ type ParseOptions =
   }
 
 parseOptions
-  :: forall eff
-   . PsaOptions
+  :: PsaOptions
   -> Array String
-  -> Eff (console :: CONSOLE, process :: PROCESS | eff) ParseOptions
+  -> Effect ParseOptions
 parseOptions opts args =
   defaultLibDir <$>
     Array.foldM parse
@@ -148,19 +142,7 @@ parseOptions opts args =
       x { opts = x.opts { libDirs = [ "bower_components" ] } }
     | otherwise = x
 
-type MainEff h eff =
-  ( process :: PROCESS
-  , console :: CONSOLE
-  , buffer :: BUFFER
-  , exception :: EXCEPTION
-  , fs :: FS
-  , cp :: CHILD_PROCESS
-  , st :: ST h
-  , now :: NOW
-  | eff
-  )
-
-main :: forall h eff. Eff (MainEff h eff) Unit
+main :: Effect Unit
 main = void do
   cwd <- Process.cwd
   argv <- Array.drop 2 <$> Process.argv
@@ -174,9 +156,11 @@ main = void do
   , jsonErrors
   } <- parseOptions (defaultOptions { cwd = cwd }) argv
 
-  let opts' = opts { libDirs = (_ <> Path.sep) <<< Path.resolve [cwd] <$> opts.libDirs }
+  libDirs <- traverse (Path.resolve [cwd] >>> map (_ <> Path.sep)) opts.libDirs
+  let opts' = opts { libDirs = libDirs }
       args  = Array.cons "compile" $ Array.cons "--json-errors" extra
 
+  Console.log (unsafeCoerce opts')
   stashData <-
     if stash
       then readStashFile stashFile
@@ -188,7 +172,7 @@ main = void do
       case jsonParser err >>= decodeJson >>= parsePsaResult of
         Left _ -> Console.error err
         Right out -> do
-          files <- STMap.new
+          files <- Ref.new FO.empty
           let loadLinesImpl = if showSource then loadLines files else loadNothing
               filenames = insertFilenames (insertFilenames Set.empty out.errors) out.warnings
           merged <- mergeWarnings filenames stashData.date stashData.stash out.warnings
@@ -197,7 +181,7 @@ main = void do
           if jsonErrors
             then JsonPrinter.print out'
             else DefaultPrinter.print opts' out'
-          if StrMap.isEmpty out'.stats.allErrors
+          if FO.isEmpty out'.stats.allErrors
             then Process.exit 0
             else Process.exit 1
 
@@ -208,13 +192,13 @@ main = void do
 
   spawn' cmd args onExit = do
     child <- Child.spawn cmd args Child.defaultSpawnOptions { stdio = stdio }
-    buffer <- ST.newSTRef ""
+    buffer <- Ref.new ""
     Stream.onDataString (Child.stderr child) Encoding.UTF8 \chunk ->
-      void $ ST.modifySTRef buffer (_ <> chunk)
+      Ref.modify_ (_ <> chunk) buffer
     Child.onExit child \status ->
       case status of
         Child.Normally n -> do
-          ST.readSTRef buffer >>= onExit
+          Ref.read buffer >>= onExit
           Process.exit n
         Child.BySignal s -> do
           Console.error (show s)
@@ -224,7 +208,7 @@ main = void do
   retryWithCmd cmd args onExit err
     | err.code == "ENOENT" = do
      -- On windows, if the executable wasn't found, try adding .cmd
-     if Process.platform == Win32
+     if Process.platform == Just Win32
        then
          case Str.stripSuffix (Str.Pattern ".cmd") cmd of
            Nothing      -> spawn' (cmd <> ".cmd") args onExit
@@ -236,12 +220,13 @@ main = void do
 
   -- TODO: Handle exceptions
   loadLines files filename pos = do
-    contents <- STMap.peek files filename >>= \cache ->
+    cache <- FO.lookup filename <$> Ref.read files
+    contents <-
       case cache of
         Just lines -> pure lines
         Nothing -> do
           lines <- Str.split (Str.Pattern "\n") <$> File.readTextFile Encoding.UTF8 filename
-          _ <- STMap.poke files filename lines
+          Ref.modify_ (FO.insert filename lines) files
           pure lines
     let source = Array.slice (pos.startLine - 1) (pos.endLine) contents
     pure $ Just source
@@ -249,7 +234,7 @@ main = void do
   decodeStash s = jsonParser s >>= decodeJson >>= traverse parsePsaError
   encodeStash s = encodeJson (encodePsaError <$> s)
 
-  emptyStash :: forall a e. Eff (now :: NOW | e) { date :: DateTime, stash :: Array a }
+  emptyStash :: forall a. Effect { date :: DateTime, stash :: Array a }
   emptyStash = { date: _ , stash: [] } <$> toDateTime <$> now
 
   readStashFile stashFile = catchException (const emptyStash) do
@@ -264,7 +249,7 @@ main = void do
     File.writeTextFile Encoding.UTF8 stashFile file
 
   mergeWarnings filenames date old new = do
-    fileStat <- STMap.new
+    fileStat <- Ref.new FO.empty
     old' <- flip Array.filterA old \x ->
       case x.filename of
         Nothing -> pure false
@@ -272,13 +257,13 @@ main = void do
           if Set.member f filenames
             then pure false
             else do
-              stat <- STMap.peek fileStat f
+              stat <- FO.lookup f <$> Ref.read fileStat
               case stat of
                 Just s -> pure s
                 Nothing -> do
                   s <- catchException (\_ -> pure false) $
                     (date > _) <<< Stats.modifiedTime <$> File.stat f
-                  _ <- STMap.poke fileStat f s
+                  _ <- Ref.modify_ (FO.insert f s) fileStat
                   pure s
     pure $ old' <> new
 
