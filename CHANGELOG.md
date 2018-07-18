@@ -1,3 +1,7 @@
+### v0.7.1 (2018-07-18)
+
+* Removed stray log statement
+
 ### v0.7.0 (2018-07-13)
 
 * Account for changes in 0.12 for relative paths in errors
