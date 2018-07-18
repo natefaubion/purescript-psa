@@ -33,7 +33,6 @@ import Partial.Unsafe (unsafePartial)
 import Psa (PsaOptions, StatVerbosity(..), parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 import Psa.Printer.Json as JsonPrinter
-import Unsafe.Coerce (unsafeCoerce)
 
 foreign import version :: String
 
@@ -160,7 +159,6 @@ main = void do
   let opts' = opts { libDirs = libDirs }
       args  = Array.cons "compile" $ Array.cons "--json-errors" extra
 
-  Console.log (unsafeCoerce opts')
   stashData <-
     if stash
       then readStashFile stashFile
