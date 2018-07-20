@@ -1,3 +1,7 @@
+### v0.7.2 (2018-07-20)
+
+* Fix lib detection when purs emits an absolute path
+
 ### v0.7.1 (2018-07-18)
 
 * Removed stray log statement
