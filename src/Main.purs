@@ -216,18 +216,25 @@ main = void do
     | otherwise =
        throwException (Child.toStandardError err)
 
+  isEmptySpan filename pos =
+    filename == "" ||
+    pos.startLine == 0 && pos.endLine == 0 &&
+    pos.startColumn == 0 && pos.endColumn == 0
+
   -- TODO: Handle exceptions
-  loadLines files filename pos = do
-    cache <- FO.lookup filename <$> Ref.read files
-    contents <-
-      case cache of
-        Just lines -> pure lines
-        Nothing -> do
-          lines <- Str.split (Str.Pattern "\n") <$> File.readTextFile Encoding.UTF8 filename
-          Ref.modify_ (FO.insert filename lines) files
-          pure lines
-    let source = Array.slice (pos.startLine - 1) (pos.endLine) contents
-    pure $ Just source
+  loadLines files filename pos
+    | isEmptySpan filename pos = pure Nothing
+    | otherwise = catchException (const (pure Nothing)) do
+        cache <- FO.lookup filename <$> Ref.read files
+        contents <-
+          case cache of
+            Just lines -> pure lines
+            Nothing -> do
+              lines <- Str.split (Str.Pattern "\n") <$> File.readTextFile Encoding.UTF8 filename
+              Ref.modify_ (FO.insert filename lines) files
+              pure lines
+        let source = Array.slice (pos.startLine - 1) (pos.endLine) contents
+        pure $ Just source
 
   decodeStash s = jsonParser s >>= decodeJson >>= traverse parsePsaError
   encodeStash s = encodeJson (encodePsaError <$> s)
