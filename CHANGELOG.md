@@ -1,3 +1,7 @@
+### v0.7.3 (2018-08-23)
+
+* Fix file not found exception when processing errors that have no file information
+
 ### v0.7.2 (2018-07-20)
 
 * Fix lib detection when purs emits an absolute path
