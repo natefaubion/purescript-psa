@@ -2,7 +2,10 @@
   "name": "purescript-psa",
   "version": "0.7.3",
   "description": "Error/Warning reporting frontend for psc",
-  "keywords": ["purescript", "psc"],
+  "keywords": [
+    "purescript",
+    "psc"
+  ],
   "author": "Nathan Faubion <nathan@n-son.com> (https://github.com/natefaubion/)",
   "license": "MIT",
   "repository": "natefaubion/purescript-psa",
