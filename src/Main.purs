@@ -138,7 +138,7 @@ parseOptions opts args =
 
   defaultLibDir x
     | Array.length x.opts.libDirs == 0 =
-      x { opts = x.opts { libDirs = [ "bower_components" ] } }
+      x { opts = x.opts { libDirs = [ "bower_components", ".spago" ] } }
     | otherwise = x
 
 main :: Effect Unit
