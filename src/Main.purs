@@ -10,11 +10,13 @@ import Data.Array as Array
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..))
-import Data.Foldable (foldr, for_)
+import Data.Foldable (foldr, fold, for_)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Set as Set
 import Data.String as Str
 import Data.Traversable (traverse)
+import Data.Tuple (Tuple(..))
+import Data.Version as Version
 import Effect (Effect)
 import Effect.Console as Console
 import Effect.Exception (catchException, throw, throwException)
@@ -29,7 +31,6 @@ import Node.Path as Path
 import Node.Platform (Platform(Win32))
 import Node.Process as Process
 import Node.Stream as Stream
-import Partial.Unsafe (unsafePartial)
 import Psa (PsaOptions, StatVerbosity(..), parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 import Psa.Printer.Json as JsonPrinter
@@ -164,44 +165,73 @@ main = void do
       then readStashFile stashFile
       else emptyStash
 
-  spawn' purs args \buffer -> do
-    let stderr = Str.split (Str.Pattern "\n") buffer
-    for_ stderr \err ->
-      case jsonParser err >>= decodeJson >>= parsePsaResult of
-        Left _ -> Console.error err
-        Right out -> do
-          files <- Ref.new FO.empty
-          let loadLinesImpl = if showSource then loadLines files else loadNothing
-              filenames = insertFilenames (insertFilenames Set.empty out.errors) out.warnings
-          merged <- mergeWarnings filenames stashData.date stashData.stash out.warnings
-          when stash $ writeStashFile stashFile merged
-          out' <- output loadLinesImpl opts' out { warnings = merged }
-          if jsonErrors
-            then JsonPrinter.print out'
-            else DefaultPrinter.print opts' out'
-          if FO.isEmpty out'.stats.allErrors
-            then Process.exit 0
-            else Process.exit 1
+  readPursVersion \pursVer -> do
+    spawn' purs args \pursResult -> do
+      let errorOutput =
+            -- As of 0.14.0, JSON errors/warnings are written to stdout, but
+            -- beforehand they were written to stderr.
+            --
+            -- We need to use Tuple like this because prerelease versions compare
+            -- less than normal versions with the same major, minor, and patch
+            -- numbers according to the semver spec.
+            if Tuple (Version.major pursVer) (Version.minor pursVer) >= Tuple 0 14
+              then pursResult.stdout
+              else pursResult.stderr
+      for_ (Str.split (Str.Pattern "\n") errorOutput) \err ->
+        case jsonParser err >>= decodeJson >>= parsePsaResult of
+          Left _ -> Console.error err
+          Right out -> do
+            files <- Ref.new FO.empty
+            let loadLinesImpl = if showSource then loadLines files else loadNothing
+                filenames = insertFilenames (insertFilenames Set.empty out.errors) out.warnings
+            merged <- mergeWarnings filenames stashData.date stashData.stash out.warnings
+            when stash $ writeStashFile stashFile merged
+            out' <- output loadLinesImpl opts' out { warnings = merged }
+            if jsonErrors
+              then JsonPrinter.print out'
+              else DefaultPrinter.print opts' out'
+            if FO.isEmpty out'.stats.allErrors
+              then Process.exit pursResult.exitCode
+              else Process.exit 1
 
   where
   insertFilenames = foldr \x s -> maybe s (flip Set.insert s) x.filename
-  stdio = [ Just Child.Pipe, unsafePartial (Array.unsafeIndex Child.inherit 1), Just Child.Pipe ]
   loadNothing _ _ = pure Nothing
 
   spawn' cmd args onExit = do
-    child <- Child.spawn cmd args Child.defaultSpawnOptions { stdio = stdio }
-    buffer <- Ref.new ""
-    Stream.onDataString (Child.stderr child) Encoding.UTF8 \chunk ->
-      Ref.modify_ (_ <> chunk) buffer
+    child <- Child.spawn cmd args Child.defaultSpawnOptions { stdio = Child.pipe }
+    outBuffer <- Ref.new ""
+    errBuffer <- Ref.new ""
+    fillBuffer (Child.stdout child) outBuffer
+    fillBuffer (Child.stderr child) errBuffer
     Child.onExit child \status ->
       case status of
         Child.Normally n -> do
-          Ref.read buffer >>= onExit
-          Process.exit n
+          stdout <- Ref.read outBuffer
+          stderr <- Ref.read errBuffer
+          onExit { stdout, stderr, exitCode: n }
         Child.BySignal s -> do
           Console.error (show s)
           Process.exit 1
     Child.onError child (retryWithCmd cmd args onExit)
+
+  fillBuffer stream buffer =
+    Stream.onDataString stream Encoding.UTF8 \chunk ->
+      Ref.modify_ (_ <> chunk) buffer
+
+  readPursVersion :: (Version.Version -> Effect Unit) -> Effect Unit
+  readPursVersion cb = do
+    spawn' "purs" ["--version"] \{ stdout } -> do
+      let verStr = Str.takeWhile (_ /= Str.codePointFromChar ' ') $ Str.trim stdout
+      case Version.parseVersion verStr of
+        Right v ->
+          cb v
+        Left err -> do
+          throw $ fold
+            [ "Unable to parse the version from `purs`. (Saw: "
+            , verStr
+            , "). Please check that the right executable is on your PATH."
+            ]
 
   retryWithCmd cmd args onExit err
     | err.code == "ENOENT" = do
