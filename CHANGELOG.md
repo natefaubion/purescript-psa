@@ -1,3 +1,8 @@
+### v0.8.0 (2020-10-01)
+
+* Add .spago to lib dirs by default (@d0liver)
+* Support both 0.13 and 0.14 compiler versions (@hdgarrood)
+
 ### v0.7.3 (2018-08-23)
 
 * Fix file not found exception when processing errors that have no file information
