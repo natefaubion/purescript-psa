@@ -2,16 +2,18 @@ module Main where
 
 import Prelude
 
+import Control.Alternative ((<|>))
 import Data.Argonaut.Core (stringify)
-import Data.Argonaut.Decode (decodeJson)
+import Data.Argonaut.Decode (decodeJson, printJsonDecodeError)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Argonaut.Parser (jsonParser)
 import Data.Array as Array
+import Data.Bifunctor (lmap)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..))
 import Data.Foldable (foldr, fold, for_)
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Set as Set
 import Data.String as Str
 import Data.Traversable (traverse)
@@ -41,6 +43,7 @@ defaultOptions :: PsaOptions
 defaultOptions =
   { ansi: true
   , censorWarnings: false
+  , censorUserDefinedWarnings: Set.empty
   , censorLib: false
   , censorSrc: false
   , censorCodes: Set.empty
@@ -109,6 +112,9 @@ parseOptions opts args =
     | arg == "--censor-warnings" =
       pure p { opts = p.opts { censorWarnings = true } }
 
+    | isPrefix "--censor-user-defined-warnings=" arg =
+      pure p { opts = p.opts { censorUserDefinedWarnings = Set.insert (unquoted $ Str.drop 31 arg) p.opts.censorUserDefinedWarnings } }
+
     | arg == "--censor-lib" =
       pure p { opts = p.opts { censorLib = true } }
 
@@ -136,6 +142,10 @@ parseOptions opts args =
     case Str.indexOf (Str.Pattern s) str of
       Just x | x == 0 -> true
       _               -> false
+
+  unquoted str = fromMaybe str $
+    (Str.stripPrefix (Str.Pattern "'") str >>= Str.stripSuffix (Str.Pattern "'")) <|>
+    (Str.stripPrefix (Str.Pattern "\"") str >>= Str.stripSuffix (Str.Pattern "\""))
 
   defaultLibDir x
     | Array.length x.opts.libDirs == 0 =
@@ -178,7 +188,7 @@ main = void do
               then pursResult.stdout
               else pursResult.stderr
       for_ (Str.split (Str.Pattern "\n") errorOutput) \err ->
-        case jsonParser err >>= decodeJson >>= parsePsaResult of
+        case jsonParser err >>= decodeJson >>> lmap printJsonDecodeError >>= parsePsaResult of
           Left _ -> Console.error err
           Right out -> do
             files <- Ref.new FO.empty
@@ -266,7 +276,7 @@ main = void do
         let source = Array.slice (pos.startLine - 1) (pos.endLine) contents
         pure $ Just source
 
-  decodeStash s = jsonParser s >>= decodeJson >>= traverse parsePsaError
+  decodeStash s = jsonParser s >>= decodeJson >>> lmap printJsonDecodeError >>= traverse parsePsaError
   encodeStash s = encodeJson (encodePsaError <$> s)
 
   emptyStash :: forall a. Effect { date :: DateTime, stash :: Array a }
@@ -312,23 +322,25 @@ Usage: psa [--censor-lib] [--censor-src]
            PSC_OPTIONS
 
 Available options:
-  -v,--version           Show the version number
-  -h,--help              Show this help text
-  --verbose-stats        Show counts for each warning type
-  --censor-stats         Censor warning/error summary
-  --censor-warnings      Censor all warnings
-  --censor-lib           Censor warnings from library sources
-  --censor-src           Censor warnings from project sources
-  --censor-codes=CODES   Censor specific error codes
-  --filter-codes=CODES   Only show specific error codes
-  --no-colors            Disable ANSI colors
-  --no-source            Disable original source code printing
-  --strict               Promotes src warnings to errors
-  --stash                Enable persistent warnings (defaults to .psa-stash)
-  --stash=FILE           Enable persistent warnings using a specific stash file
-  --is-lib=DIR           Distinguishing library path (defaults to 'bower_components')
-  --purs=PURS            Name of purs executable (defaults to 'purs')
+  -v,--version                             Show the version number
+  -h,--help                                Show this help text
+  --verbose-stats                          Show counts for each warning type
+  --censor-stats                           Censor warning/error summary
+  --censor-warnings                        Censor all warnings
+  --censor-user-defined-warnings=WARNING   Censor specific user defined warnings
+  --censor-lib                             Censor warnings from library sources
+  --censor-src                             Censor warnings from project sources
+  --censor-codes=CODES                     Censor specific error codes
+  --filter-codes=CODES                     Only show specific error codes
+  --no-colors                              Disable ANSI colors
+  --no-source                              Disable original source code printing
+  --strict                                 Promotes src warnings to errors
+  --stash                                  Enable persistent warnings (defaults to .psa-stash)
+  --stash=FILE                             Enable persistent warnings using a specific stash file
+  --is-lib=DIR                             Distinguishing library path (defaults to 'bower_components')
+  --purs=PURS                              Name of purs executable (defaults to 'purs')
 
-  CODES                  Comma-separated list of purs error codes
-  PSC_OPTIONS            Any extra options are passed to 'purs compile'
+  CODES                                    Comma-separated list of purs error codes
+  PSC_OPTIONS                              Any extra options are passed to 'purs compile'
+  WARNING                                  User defined warning message
 """
