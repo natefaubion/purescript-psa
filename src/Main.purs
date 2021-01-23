@@ -165,7 +165,7 @@ main = void do
       then readStashFile stashFile
       else emptyStash
 
-  readPursVersion \pursVer -> do
+  readPursVersion purs \pursVer -> do
     spawn' purs args \pursResult -> do
       let errorOutput =
             -- As of 0.14.0, JSON errors/warnings are written to stdout, but
@@ -219,9 +219,9 @@ main = void do
     Stream.onDataString stream Encoding.UTF8 \chunk ->
       Ref.modify_ (_ <> chunk) buffer
 
-  readPursVersion :: (Version.Version -> Effect Unit) -> Effect Unit
-  readPursVersion cb = do
-    spawn' "purs" ["--version"] \{ stdout } -> do
+  readPursVersion :: String -> (Version.Version -> Effect Unit) -> Effect Unit
+  readPursVersion purs cb = do
+    spawn' purs ["--version"] \{ stdout } -> do
       let verStr = Str.takeWhile (_ /= Str.codePointFromChar ' ') $ Str.trim stdout
       case Version.parseVersion verStr of
         Right v ->
