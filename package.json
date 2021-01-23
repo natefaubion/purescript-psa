@@ -1,6 +1,6 @@
 {
   "name": "purescript-psa",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Error/Warning reporting frontend for psc",
   "keywords": [
     "purescript",

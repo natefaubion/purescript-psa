@@ -1,3 +1,7 @@
+### v0.8.1 (2021-01-23)
+
+* Fix ignored `--purs=` command-line argument (@joneshf)
+
 ### v0.8.0 (2020-10-01)
 
 * Add .spago to lib dirs by default (@d0liver)
