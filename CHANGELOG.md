@@ -1,3 +1,7 @@
+### v0.8.2 (2021-01-25)
+
+* Don't swallow "Compiling..." messages (@hdgarrood)
+
 ### v0.8.1 (2021-01-23)
 
 * Fix ignored `--purs=` command-line argument (@joneshf)
