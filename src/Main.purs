@@ -31,6 +31,7 @@ import Node.Path as Path
 import Node.Platform (Platform(Win32))
 import Node.Process as Process
 import Node.Stream as Stream
+import Partial.Unsafe (unsafePartial)
 import Psa (PsaOptions, StatVerbosity(..), parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 import Psa.Printer.Json as JsonPrinter
@@ -166,18 +167,18 @@ main = void do
       else emptyStash
 
   readPursVersion purs \pursVer -> do
-    spawn' purs args \pursResult -> do
-      let errorOutput =
-            -- As of 0.14.0, JSON errors/warnings are written to stdout, but
-            -- beforehand they were written to stderr.
-            --
-            -- We need to use Tuple like this because prerelease versions compare
-            -- less than normal versions with the same major, minor, and patch
-            -- numbers according to the semver spec.
-            if Tuple (Version.major pursVer) (Version.minor pursVer) >= Tuple 0 14
-              then pursResult.stdout
-              else pursResult.stderr
-      for_ (Str.split (Str.Pattern "\n") errorOutput) \err ->
+    let outputStream =
+          -- As of 0.14.0, JSON errors/warnings are written to stdout, but
+          -- beforehand they were written to stderr.
+          --
+          -- We need to use Tuple like this because prerelease versions compare
+          -- less than normal versions with the same major, minor, and patch
+          -- numbers according to the semver spec.
+          if Tuple (Version.major pursVer) (Version.minor pursVer) >= Tuple 0 14
+            then Stdout
+            else Stderr
+    spawn' outputStream purs args \pursResult -> do
+      for_ (Str.split (Str.Pattern "\n") pursResult.output) \err ->
         case jsonParser err >>= decodeJson >>= parsePsaResult of
           Left _ -> Console.error err
           Right out -> do
@@ -198,31 +199,36 @@ main = void do
   insertFilenames = foldr \x s -> maybe s (flip Set.insert s) x.filename
   loadNothing _ _ = pure Nothing
 
-  spawn' cmd args onExit = do
-    child <- Child.spawn cmd args Child.defaultSpawnOptions { stdio = Child.pipe }
-    outBuffer <- Ref.new ""
-    errBuffer <- Ref.new ""
-    fillBuffer (Child.stdout child) outBuffer
-    fillBuffer (Child.stderr child) errBuffer
+  spawn' outputStream cmd args onExit = do
+    let stdio =
+          case outputStream of
+            Stdout -> [ Just Child.Pipe, Just Child.Pipe, unsafePartial (Array.unsafeIndex Child.inherit 2) ]
+            Stderr -> [ Just Child.Pipe, unsafePartial (Array.unsafeIndex Child.inherit 1), Just Child.Pipe ]
+
+    child <- Child.spawn cmd args Child.defaultSpawnOptions { stdio = stdio }
+    buffer <- Ref.new ""
+    fillBuffer buffer $
+      case outputStream of
+        Stdout -> Child.stdout child
+        Stderr -> Child.stderr child
     Child.onExit child \status ->
       case status of
         Child.Normally n -> do
-          stdout <- Ref.read outBuffer
-          stderr <- Ref.read errBuffer
-          onExit { stdout, stderr, exitCode: n }
+          output <- Ref.read buffer
+          onExit { output, exitCode: n }
         Child.BySignal s -> do
           Console.error (show s)
           Process.exit 1
-    Child.onError child (retryWithCmd cmd args onExit)
+    Child.onError child (retryWithCmd outputStream cmd args onExit)
 
-  fillBuffer stream buffer =
+  fillBuffer buffer stream =
     Stream.onDataString stream Encoding.UTF8 \chunk ->
       Ref.modify_ (_ <> chunk) buffer
 
   readPursVersion :: String -> (Version.Version -> Effect Unit) -> Effect Unit
   readPursVersion purs cb = do
-    spawn' purs ["--version"] \{ stdout } -> do
-      let verStr = Str.takeWhile (_ /= Str.codePointFromChar ' ') $ Str.trim stdout
+    spawn' Stdout purs ["--version"] \{ output } -> do
+      let verStr = Str.takeWhile (_ /= Str.codePointFromChar ' ') $ Str.trim output
       case Version.parseVersion verStr of
         Right v ->
           cb v
@@ -233,13 +239,13 @@ main = void do
             , "). Please check that the right executable is on your PATH."
             ]
 
-  retryWithCmd cmd args onExit err
+  retryWithCmd outputStream cmd args onExit err
     | err.code == "ENOENT" = do
      -- On windows, if the executable wasn't found, try adding .cmd
      if Process.platform == Just Win32
        then
          case Str.stripSuffix (Str.Pattern ".cmd") cmd of
-           Nothing      -> spawn' (cmd <> ".cmd") args onExit
+           Nothing      -> spawn' outputStream (cmd <> ".cmd") args onExit
            Just bareCmd -> throw $ "`" <> bareCmd <> "` executable not found. (nor `" <> cmd <> "`)"
        else
          throw $ "`" <> cmd <> "` executable not found."
@@ -301,6 +307,9 @@ main = void do
                   _ <- Ref.modify_ (FO.insert f s) fileStat
                   pure s
     pure $ old' <> new
+
+-- Indicates which output stream we are interested in when spawning a child process.
+data OutputStream = Stdout | Stderr
 
 usage :: String
 usage = """psa - Error/Warning reporting frontend for 'purs compile'
