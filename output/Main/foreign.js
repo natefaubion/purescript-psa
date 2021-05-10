@@ -1,0 +1,3 @@
+// module Main
+
+exports.version = "";
