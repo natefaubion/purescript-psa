@@ -14,16 +14,16 @@
     "psa": "index.js"
   },
   "directories": {
-    "test": "test"
+    "test": "testcase"
   },
   "scripts": {
     "build": "npm run compile",
     "compile": "psa -c \"src/**/*.purs\" \"bower_components/purescript-*/src/**/*.purs\"",
     "compile-self": "node index.js -c \"src/**/*.purs\" \"bower_components/purescript-*/src/**/*.purs\"",
-    "pretest": "rm -rf test/output",
-    "test": "node index.js --is-lib=test/bower_components --is-lib=test/lib -o \"test/output\" \"test/*.purs\" \"test/lib/*.purs\" \"test/bower_components/purescript-*/src/**/*.purs\"",
-    "pretest-purs": "rm -rf test/output",
-    "test-purs": "purs -o \"test/output\" \"test/*.purs\" \"test/bower_components/purescript-*/src/**/*.purs\"",
+    "pretest": "rm -rf testcase/output",
+    "test": "node index.js --is-lib=testcase/bower_components --is-lib=testcase/lib -o \"testcase/output\" \"testcase/*.purs\" \"testcase/lib/*.purs\" \"testcase/bower_components/purescript-*/src/**/*.purs\"",
+    "pretest-purs": "rm -rf testcase/output",
+    "test-purs": "purs -o \"testcase/output\" \"testcase/*.purs\" \"testcase/bower_components/purescript-*/src/**/*.purs\"",
     "prepublish": "rm -rf output && npm run compile"
   },
   "devDependencies": {
