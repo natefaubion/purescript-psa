@@ -18,8 +18,8 @@
   },
   "scripts": {
     "build": "npm run compile",
-    "compile": "psa -c \"src/**/*.purs\" \"bower_components/purescript-*/src/**/*.purs\"",
-    "compile-self": "node index.js -c \"src/**/*.purs\" \"bower_components/purescript-*/src/**/*.purs\"",
+    "compile": "psa -c \"src/**/*.purs\" \".spago/p/**/src/**/*.purs\"",
+    "compile-self": "node index.js -c \"src/**/*.purs\" \".spago/p/**/src/**/*.purs\"",
     "pretest": "rm -rf testcase/output",
     "test": "node index.js --is-lib=testcase/bower_components --is-lib=testcase/lib -o \"testcase/output\" \"testcase/*.purs\" \"testcase/lib/*.purs\" \"testcase/bower_components/purescript-*/src/**/*.purs\"",
     "pretest-purs": "rm -rf testcase/output",
