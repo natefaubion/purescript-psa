@@ -7,3 +7,5 @@
 npm-debug.log
 .psa-stash
 .psc-ide-port
+.purs-repl
+.spago

@@ -1,3 +1,3 @@
 // module Main
 
-exports.version = "";
+export const version = global.version;
