@@ -2,6 +2,7 @@
 /node_modules/
 /.pulp-cache/
 /output/
+/dist/
 /.psci*
 /src/.webpack.js
 npm-debug.log
