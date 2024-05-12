@@ -1,6 +1,6 @@
 module Main where
 
-import Node.ChildProcess.Types
+import Node.ChildProcess.Types (Exit(..), pipe, shareStream)
 import Prelude
 
 import Data.Argonaut.Core (stringify)
@@ -13,12 +13,12 @@ import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..), either)
 import Data.Foldable (foldr, fold, for_)
 import Data.Maybe (Maybe(..), maybe)
+import Data.Nullable (toMaybe)
 import Data.Set as Set
 import Data.String as Str
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Data.Version as Version
-import Debug (spy)
 import Effect (Effect)
 import Effect.Console as Console
 import Effect.Exception (catchException, throw, throwException)
@@ -26,8 +26,6 @@ import Effect.Now (now)
 import Effect.Ref as Ref
 import Foreign.Object as FO
 import Node.Buffer as Buffer
-import Node.ChildProcess (errorH)
-import Node.ChildProcess as Child
 import Node.Encoding (Encoding(..))
 import Node.Encoding as Encoding
 import Node.Errors.SystemError (code, toError)
@@ -36,11 +34,11 @@ import Node.FS.Stats as Stats
 import Node.FS.Sync as File
 import Node.Path as Path
 import Node.Platform (Platform(Win32))
-import Node.Process (stdin, stdout)
+import Node.Process (stderr, stdout)
 import Node.Process as Process
-import Node.Stream (dataH, dataHStr, endH)
-import Node.Stream as Stream
-import Partial.Unsafe (unsafePartial)
+import Node.Stream (dataH)
+import Node.UnsafeChildProcess.Unsafe (spawn', unsafeStderr, unsafeStdout) as UnsafeChild
+import Node.UnsafeChildProcess.Safe (errorH, exitH) as UnsafeChild
 import Psa (PsaOptions, StatVerbosity(..), parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 import Psa.Printer.Json as JsonPrinter
@@ -211,16 +209,16 @@ main = void do
   spawn' outputStream cmd args onExit = do
     let stdio =
           case outputStream of
-            Stdout -> [ pipe, pipe, shareStream stdout ]
-            Stderr -> [ pipe, shareStream stdin, pipe ]
+            Stdout -> [ pipe, pipe, shareStream stderr ]
+            Stderr -> [ pipe, shareStream stdout, pipe ]
 
-    child <- Child.spawn' cmd args (_ { appendStdio = Just stdio })
+    child <- UnsafeChild.spawn' cmd args { stdio, detached : false }
     buffer <- Ref.new ""
-    _ <- fillBuffer buffer $
+    _ <- maybe (pure $ pure unit) (fillBuffer buffer) (toMaybe $
           case outputStream of
-            Stdout -> Child.stdout child
-            Stderr -> Child.stderr child
-    child # H.on_ Child.exitH  \status ->
+            Stdout -> UnsafeChild.unsafeStdout child
+            Stderr -> UnsafeChild.unsafeStderr child)
+    child # H.on_ UnsafeChild.exitH  \status ->
       case status of
         Normally n -> do
           output <- Ref.read buffer
@@ -228,7 +226,7 @@ main = void do
         BySignal s -> do
           Console.error (show s)
           Process.exit' 1
-    child # H.on_ errorH (retryWithCmd outputStream cmd args onExit)
+    child # H.on_ UnsafeChild.errorH (retryWithCmd outputStream cmd args onExit)
 
   fillBuffer buffer stream = 
     stream # H.on dataH \chunk -> do
@@ -242,7 +240,7 @@ main = void do
       case Version.parseVersion verStr of
         Right v ->
           cb v
-        Left err -> do
+        Left _ -> do
           throw $ fold
             [ "Unable to parse the version from `purs`. (Saw: "
             , verStr
