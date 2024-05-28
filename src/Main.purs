@@ -1,6 +1,5 @@
 module Main where
 
-import Node.ChildProcess.Types (Exit(..), pipe, shareStream)
 import Prelude
 
 import Data.Argonaut.Core (stringify)
@@ -8,10 +7,11 @@ import Data.Argonaut.Decode (decodeJson, printJsonDecodeError)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Argonaut.Parser (jsonParser)
 import Data.Array as Array
+import Data.Bifunctor (lmap)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (toDateTime)
-import Data.Either (Either(..), either)
-import Data.Foldable (foldr, fold, for_)
+import Data.Either (Either(..))
+import Data.Foldable (fold, foldr, for_, traverse_)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Nullable (toMaybe)
 import Data.Set as Set
@@ -26,6 +26,7 @@ import Effect.Now (now)
 import Effect.Ref as Ref
 import Foreign.Object as FO
 import Node.Buffer as Buffer
+import Node.ChildProcess.Types (Exit(..), pipe, shareStream)
 import Node.Encoding (Encoding(..))
 import Node.Encoding as Encoding
 import Node.Errors.SystemError (code, toError)
@@ -37,8 +38,8 @@ import Node.Platform (Platform(Win32))
 import Node.Process (stderr, stdout)
 import Node.Process as Process
 import Node.Stream (dataH)
-import Node.UnsafeChildProcess.Unsafe (spawn', unsafeStderr, unsafeStdout) as UnsafeChild
 import Node.UnsafeChildProcess.Safe (errorH, exitH) as UnsafeChild
+import Node.UnsafeChildProcess.Unsafe (spawn', unsafeStderr, unsafeStdout) as UnsafeChild
 import Psa (PsaOptions, StatVerbosity(..), parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 import Psa.Printer.Json as JsonPrinter
@@ -186,7 +187,7 @@ main = void do
             else Stderr
     spawn' outputStream purs args \pursResult -> do
       for_ (Str.split (Str.Pattern "\n") pursResult.output) \err ->
-        case jsonParser err >>= (either (Left <<< printJsonDecodeError) (Right <<< identity) <<< decodeJson) >>= parsePsaResult of
+        case jsonParser err >>= (lmap printJsonDecodeError <<< decodeJson) >>= parsePsaResult of
           Left _ -> Console.error err
           Right out -> do
             files <- Ref.new FO.empty
@@ -214,10 +215,9 @@ main = void do
 
     child <- UnsafeChild.spawn' cmd args { stdio, detached : false }
     buffer <- Ref.new ""
-    _ <- maybe (pure $ pure unit) (fillBuffer buffer) (toMaybe $
-          case outputStream of
-            Stdout -> UnsafeChild.unsafeStdout child
-            Stderr -> UnsafeChild.unsafeStderr child)
+    traverse_ (fillBuffer buffer) $ toMaybe case outputStream of
+      Stdout -> UnsafeChild.unsafeStdout child
+      Stderr -> UnsafeChild.unsafeStderr child
     child # H.on_ UnsafeChild.exitH  \status ->
       case status of
         Normally n -> do
@@ -280,7 +280,7 @@ main = void do
         let source = Array.slice (pos.startLine - 1) (pos.endLine) contents
         pure $ Just source
 
-  decodeStash s = jsonParser s >>= (either (Left <<< printJsonDecodeError) (Right <<< identity) <<< decodeJson) >>= (traverse parsePsaError)
+  decodeStash s = jsonParser s >>= (lmap printJsonDecodeError <<< decodeJson) >>= (traverse parsePsaError)
   encodeStash s = encodeJson (encodePsaError <$> s)
 
   emptyStash :: forall a. Effect { date :: DateTime, stash :: Array a }

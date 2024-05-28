@@ -21,6 +21,8 @@
     "test": "testcase"
   },
   "scripts": {
+    "version" : "echo 'export const version = \"v'$npm_package_version'\";' > ./src/Main.js && git add ./src/Main.js",
+    "postversion": "git push && git push --tags",
     "build": "npm run compile",
     "compile": "spago bundle --outfile dist/index.js --bundle-type module --platform node",
     "compile-self": "node index.js -c \"src/**/*.purs\" \".spago/p/**/src/**/*.purs\"",
