@@ -213,7 +213,7 @@ main = void do
             Stdout -> [ pipe, pipe, shareStream stderr ]
             Stderr -> [ pipe, shareStream stdout, pipe ]
 
-    child <- UnsafeChild.spawn' cmd args { stdio, detached : false }
+    child <- UnsafeChild.spawn' cmd args { stdio, detached: false }
     buffer <- Ref.new ""
     traverse_ (fillBuffer buffer) $ toMaybe case outputStream of
       Stdout -> UnsafeChild.unsafeStdout child
