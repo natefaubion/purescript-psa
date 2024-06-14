@@ -280,7 +280,7 @@ main = void do
         let source = Array.slice (pos.startLine - 1) (pos.endLine) contents
         pure $ Just source
 
-  decodeStash s = jsonParser s >>= (lmap printJsonDecodeError <<< decodeJson) >>= (traverse parsePsaError)
+  decodeStash s = jsonParser s >>= (lmap printJsonDecodeError <<< decodeJson) >>= traverse parsePsaError
   encodeStash s = encodeJson (encodePsaError <$> s)
 
   emptyStash :: forall a. Effect { date :: DateTime, stash :: Array a }
