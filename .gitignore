@@ -2,8 +2,11 @@
 /node_modules/
 /.pulp-cache/
 /output/
+/dist/
 /.psci*
 /src/.webpack.js
 npm-debug.log
 .psa-stash
 .psc-ide-port
+.purs-repl
+.spago

@@ -1,0 +1,28 @@
+package:
+  name: psa
+  dependencies:
+    - console
+    - effect
+    - prelude
+    - node-fs
+    - node-buffer
+    - node-child-process
+    - node-process
+    - node-streams
+    - st
+    - foreign-object
+    - now
+    - datetime
+    - psa-utils
+    - refs
+    - ordered-collections
+    - versions
+    - debug
+workspace:
+  packageSet:
+    registry: 50.13.0
+  extraPackages: 
+    psa-utils: 
+      git: https://github.com/natefaubion/purescript-psa-utils.git
+      ref: master
+  

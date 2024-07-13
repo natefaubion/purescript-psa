@@ -3,15 +3,17 @@ module Main where
 import Prelude
 
 import Data.Argonaut.Core (stringify)
-import Data.Argonaut.Decode (decodeJson)
+import Data.Argonaut.Decode (decodeJson, printJsonDecodeError)
 import Data.Argonaut.Encode (encodeJson)
 import Data.Argonaut.Parser (jsonParser)
 import Data.Array as Array
+import Data.Bifunctor (lmap)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..))
-import Data.Foldable (foldr, fold, for_)
+import Data.Foldable (fold, foldr, for_, traverse_)
 import Data.Maybe (Maybe(..), maybe)
+import Data.Nullable (toMaybe)
 import Data.Set as Set
 import Data.String as Str
 import Data.Traversable (traverse)
@@ -23,15 +25,21 @@ import Effect.Exception (catchException, throw, throwException)
 import Effect.Now (now)
 import Effect.Ref as Ref
 import Foreign.Object as FO
-import Node.ChildProcess as Child
+import Node.Buffer as Buffer
+import Node.ChildProcess.Types (Exit(..), pipe, shareStream)
+import Node.Encoding (Encoding(..))
 import Node.Encoding as Encoding
+import Node.Errors.SystemError (code, toError)
+import Node.EventEmitter as H
 import Node.FS.Stats as Stats
 import Node.FS.Sync as File
 import Node.Path as Path
 import Node.Platform (Platform(Win32))
+import Node.Process (stderr, stdout)
 import Node.Process as Process
-import Node.Stream as Stream
-import Partial.Unsafe (unsafePartial)
+import Node.Stream (dataH)
+import Node.UnsafeChildProcess.Safe (errorH, exitH) as UnsafeChild
+import Node.UnsafeChildProcess.Unsafe (spawn', unsafeStderr, unsafeStdout) as UnsafeChild
 import Psa (PsaOptions, StatVerbosity(..), parsePsaResult, parsePsaError, encodePsaError, output)
 import Psa.Printer.Default as DefaultPrinter
 import Psa.Printer.Json as JsonPrinter
@@ -81,10 +89,10 @@ parseOptions opts args =
   where
   parse p arg
     | arg == "--version" || arg == "-v" =
-      Console.log version *> Process.exit 0
+      Console.log version *> Process.exit' 0
 
     | arg == "--help" || arg == "-h" =
-      Console.log usage *> Process.exit 0
+      Console.log usage *> Process.exit' 0
 
     | arg == "--stash" =
       pure p { stash = true }
@@ -179,7 +187,7 @@ main = void do
             else Stderr
     spawn' outputStream purs args \pursResult -> do
       for_ (Str.split (Str.Pattern "\n") pursResult.output) \err ->
-        case jsonParser err >>= decodeJson >>= parsePsaResult of
+        case jsonParser err >>= (lmap printJsonDecodeError <<< decodeJson) >>= parsePsaResult of
           Left _ -> Console.error err
           Right out -> do
             files <- Ref.new FO.empty
@@ -192,8 +200,8 @@ main = void do
               then JsonPrinter.print out'
               else DefaultPrinter.print opts' out'
             if FO.isEmpty out'.stats.allErrors
-              then Process.exit pursResult.exitCode
-              else Process.exit 1
+              then Process.exit' pursResult.exitCode
+              else Process.exit' 1
 
   where
   insertFilenames = foldr \x s -> maybe s (flip Set.insert s) x.filename
@@ -202,28 +210,28 @@ main = void do
   spawn' outputStream cmd args onExit = do
     let stdio =
           case outputStream of
-            Stdout -> [ Just Child.Pipe, Just Child.Pipe, unsafePartial (Array.unsafeIndex Child.inherit 2) ]
-            Stderr -> [ Just Child.Pipe, unsafePartial (Array.unsafeIndex Child.inherit 1), Just Child.Pipe ]
+            Stdout -> [ pipe, pipe, shareStream stderr ]
+            Stderr -> [ pipe, shareStream stdout, pipe ]
 
-    child <- Child.spawn cmd args Child.defaultSpawnOptions { stdio = stdio }
+    child <- UnsafeChild.spawn' cmd args { stdio, detached: false }
     buffer <- Ref.new ""
-    fillBuffer buffer $
-      case outputStream of
-        Stdout -> Child.stdout child
-        Stderr -> Child.stderr child
-    Child.onExit child \status ->
+    traverse_ (fillBuffer buffer) $ toMaybe case outputStream of
+      Stdout -> UnsafeChild.unsafeStdout child
+      Stderr -> UnsafeChild.unsafeStderr child
+    child # H.on_ UnsafeChild.exitH  \status ->
       case status of
-        Child.Normally n -> do
+        Normally n -> do
           output <- Ref.read buffer
           onExit { output, exitCode: n }
-        Child.BySignal s -> do
+        BySignal s -> do
           Console.error (show s)
-          Process.exit 1
-    Child.onError child (retryWithCmd outputStream cmd args onExit)
+          Process.exit' 1
+    child # H.on_ UnsafeChild.errorH (retryWithCmd outputStream cmd args onExit)
 
-  fillBuffer buffer stream =
-    Stream.onDataString stream Encoding.UTF8 \chunk ->
-      Ref.modify_ (_ <> chunk) buffer
+  fillBuffer buffer stream = 
+    stream # H.on dataH \chunk -> do
+      val <- Buffer.toString UTF8 chunk
+      Ref.modify_ (_ <> val) buffer
 
   readPursVersion :: String -> (Version.Version -> Effect Unit) -> Effect Unit
   readPursVersion purs cb = do
@@ -232,7 +240,7 @@ main = void do
       case Version.parseVersion verStr of
         Right v ->
           cb v
-        Left err -> do
+        Left _ -> do
           throw $ fold
             [ "Unable to parse the version from `purs`. (Saw: "
             , verStr
@@ -240,7 +248,7 @@ main = void do
             ]
 
   retryWithCmd outputStream cmd args onExit err
-    | err.code == "ENOENT" = do
+    | code err == "ENOENT" = do
      -- On windows, if the executable wasn't found, try adding .cmd
      if Process.platform == Just Win32
        then
@@ -250,7 +258,7 @@ main = void do
        else
          throw $ "`" <> cmd <> "` executable not found."
     | otherwise =
-       throwException (Child.toStandardError err)
+       throwException (toError err)
 
   isEmptySpan filename pos =
     filename == "" ||
@@ -272,7 +280,7 @@ main = void do
         let source = Array.slice (pos.startLine - 1) (pos.endLine) contents
         pure $ Just source
 
-  decodeStash s = jsonParser s >>= decodeJson >>= traverse parsePsaError
+  decodeStash s = jsonParser s >>= (lmap printJsonDecodeError <<< decodeJson) >>= traverse parsePsaError
   encodeStash s = encodeJson (encodePsaError <$> s)
 
   emptyStash :: forall a. Effect { date :: DateTime, stash :: Array a }
